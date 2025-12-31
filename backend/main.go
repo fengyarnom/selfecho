@@ -63,8 +63,10 @@ type article struct {
 }
 
 type config struct {
-	Database dbConfig   `yaml:"database"`
-	Site     siteConfig `yaml:"site"`
+	Database  dbConfig   `yaml:"database"`
+	Site      siteConfig `yaml:"site"`
+	Port      int        `yaml:"port"`
+	StaticDir string     `yaml:"staticDir"`
 }
 
 type dbConfig struct {
@@ -78,6 +80,24 @@ type dbConfig struct {
 
 type siteConfig struct {
 	Title string `yaml:"title" json:"title"`
+}
+
+func defaultConfig() config {
+	return config{
+		Database: dbConfig{
+			Host:     "127.0.0.1",
+			Port:     5432,
+			User:     "username",
+			Password: "password",
+			Name:     "selfechodb",
+			SSLMode:  "disable",
+		},
+		Site: siteConfig{
+			Title: "Yarnom'Blog",
+		},
+		Port:      8080,
+		StaticDir: "./static",
+	}
 }
 
 type server struct {
@@ -117,9 +137,13 @@ func (s *server) backfillBodyHTML(ctx context.Context) error {
 }
 
 func loadConfig(path string) (config, error) {
-	var cfg config
+	cfg := defaultConfig()
 	bytes, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("warn: 未找到配置文件 %s，使用默认配置\n", path)
+			return cfg, nil
+		}
 		return cfg, fmt.Errorf("读取配置失败: %w", err)
 	}
 	if err := yaml.Unmarshal(bytes, &cfg); err != nil {
@@ -129,7 +153,13 @@ func loadConfig(path string) (config, error) {
 		return cfg, errors.New("配置不完整: database.host/user/name/port 必填")
 	}
 	if cfg.Site.Title == "" {
-		cfg.Site.Title = "Yarnom'Blog"
+		cfg.Site.Title = defaultConfig().Site.Title
+	}
+	if cfg.Port == 0 {
+		cfg.Port = defaultConfig().Port
+	}
+	if cfg.StaticDir == "" {
+		cfg.StaticDir = defaultConfig().StaticDir
 	}
 	return cfg, nil
 }
@@ -183,8 +213,19 @@ func makeSlug(title, provided string) (string, error) {
 }
 
 func main() {
-	configPath := filepath.Clean(filepath.Join("..", "config.yaml"))
-	cfg, err := loadConfig(configPath)
+	cfgPath := os.Getenv("CONFIG_PATH")
+	if cfgPath == "" {
+		// Prefer local config.yaml next to the binary, then parent (for dev)
+		if _, err := os.Stat("config.yaml"); err == nil {
+			cfgPath = "config.yaml"
+		} else if _, err := os.Stat(filepath.Join("..", "config.yaml")); err == nil {
+			cfgPath = filepath.Join("..", "config.yaml")
+		} else {
+			cfgPath = "config.yaml" // default; will fail with clear error if missing
+		}
+	}
+
+	cfg, err := loadConfig(cfgPath)
 	if err != nil {
 		panic(err)
 	}
@@ -251,7 +292,9 @@ func main() {
 		fmt.Printf("warn: backfill body_html failed: %v\n", err)
 	}
 
-	router.Run(":8080")
+	serveSPA(router, cfg.StaticDir)
+
+	router.Run(fmt.Sprintf(":%d", cfg.Port))
 }
 
 type archive struct {
@@ -401,6 +444,52 @@ func (s *server) collectHealth() (healthPayload, error) {
 	}
 
 	return hp, nil
+}
+
+// serveSPA serves the built Angular app directly from disk, falling back to index.html
+// for client-side routes, while keeping API/health 404s intact.
+func serveSPA(router *gin.Engine, staticDir string) {
+	if staticDir == "" {
+		return
+	}
+	dir := filepath.Clean(staticDir)
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		fmt.Printf("warn: 静态目录不存在，跳过静态文件服务: %s\n", dir)
+		return
+	}
+
+	indexPath := filepath.Join(dir, "index.html")
+	if _, err := os.Stat(indexPath); err != nil {
+		fmt.Printf("warn: index.html 不存在于静态目录 %s，跳过静态文件服务\n", dir)
+		return
+	}
+
+	router.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/api") || path == "/health" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+
+		rel := strings.TrimPrefix(path, "/")
+		rel = filepath.Clean(rel)
+		if rel == "." || rel == "/" {
+			c.File(indexPath)
+			return
+		}
+		fullPath := filepath.Join(dir, rel)
+		// prevent path traversal
+		if !strings.HasPrefix(fullPath, dir) {
+			c.File(indexPath)
+			return
+		}
+		if _, err := os.Stat(fullPath); err == nil {
+			c.File(fullPath)
+			return
+		}
+		c.File(indexPath)
+	})
 }
 
 func (s *server) listArchives(c *gin.Context) {

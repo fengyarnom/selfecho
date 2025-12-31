@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { Title } from '@angular/platform-browser';
 import { API_BASE } from './api.config';
 
 @Component({
@@ -13,11 +14,12 @@ import { API_BASE } from './api.config';
 })
 export class AppComponent implements OnInit {
   menuOpen = false;
-  siteTitle = "Yarnom'Blog";
+  siteTitle = 'Selfecho';
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private title: Title) {}
 
   ngOnInit(): void {
+    this.title.setTitle(this.siteTitle);
     this.fetchSiteConfig();
   }
 
@@ -30,6 +32,7 @@ export class AppComponent implements OnInit {
       next: (data) => {
         if (data?.title) {
           this.siteTitle = data.title;
+          this.title.setTitle(this.siteTitle);
         }
       },
       error: () => {

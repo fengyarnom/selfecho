@@ -37,3 +37,5 @@ backend/backend
 # Editor/IDE
 .idea/
 .vscode/
+scripts/
+release/

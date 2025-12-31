@@ -19,14 +19,21 @@ profile.cov
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.angular/
 
 # Go workspace file
 go.work
 go.work.sum
 
+# Go build outputs
+backend/backend
+
 # env file
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/

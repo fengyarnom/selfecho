@@ -1,0 +1,6 @@
+.viewport {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  font-family: "Segoe UI", Arial, sans-serif;
+}

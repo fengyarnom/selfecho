@@ -1,0 +1,157 @@
+:host {
+  display: block;
+}
+
+:host ::ng-deep .article-body h1,
+:host ::ng-deep .article-body h2,
+:host ::ng-deep .article-body h3,
+:host ::ng-deep .article-body h4,
+:host ::ng-deep .article-body h5,
+:host ::ng-deep .article-body h6 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0.9em 0 0.6em;
+}
+
+:host ::ng-deep .article-body h1 {
+  font-size: 1.7rem;
+}
+
+:host ::ng-deep .article-body h2 {
+  font-size: 1.45rem;
+}
+
+:host ::ng-deep .article-body h3 {
+  font-size: 1.3rem;
+}
+
+:host ::ng-deep .article-body h4 {
+  font-size: 1.1rem;
+}
+
+:host ::ng-deep .article-body h5 {
+  font-size: 1rem;
+}
+
+:host ::ng-deep .article-body h6 {
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+:host ::ng-deep .article-body h1::before,
+:host ::ng-deep .article-body h2::before,
+:host ::ng-deep .article-body h3::before {
+  display: inline-block;
+  margin-right: 0.35em;
+  color: #475569;
+  font-weight: 800;
+  content: '';
+}
+
+:host ::ng-deep .article-body h1::before {
+  content: '#';
+}
+
+:host ::ng-deep .article-body h2::before {
+  content: '##';
+}
+
+:host ::ng-deep .article-body h3::before {
+  content: '###';
+}
+
+:host ::ng-deep .article-body h1::before,
+:host ::ng-deep .article-body h2::before,
+:host ::ng-deep .article-body h3::before {
+  color: #ff7e79;
+  font-weight: 1000;
+}
+
+:host ::ng-deep .article-body p {
+  margin: 0 0 1.1rem;
+  color: #3d3d3f;
+  line-height: 1.9;
+}
+
+:host ::ng-deep .article-body ul,
+:host ::ng-deep .article-body ol {
+  margin: 0.5em 0 0.5em 1.2em;
+  padding: 0;
+}
+
+:host ::ng-deep .article-body ul li::before {
+  content: '-';
+  margin-right: 0.5em;
+  color: #3d3d3f;
+}
+
+:host ::ng-deep .article-body a {
+  color: #0f172a;
+  text-decoration: underline;
+}
+
+:host ::ng-deep .article-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+  margin: 2.5rem auto;
+}
+
+:host ::ng-deep .article-body code {
+  font-size: 0.95rem;
+  color: #222;
+  background: #e8eff0;
+  padding: 0.35rem 0.4rem;
+  border-radius: 0.25rem;
+}
+
+:host ::ng-deep .article-body pre {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1.25rem;
+  background: #f8f8f8;
+  color: #666;
+  border-radius: 0.3rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+:host ::ng-deep .article-body pre code {
+  font-size: 0.9rem;
+  border-radius: 0.25rem;
+  background: none;
+  padding: 0;
+}
+
+:host ::ng-deep .article-body p {
+  line-height: 2.1;
+}
+
+:host ::ng-deep .article-body hr {
+  display: flex;
+  border: 0;
+  margin: 1em auto;
+  justify-content: center;
+  align-items: center;
+}
+
+:host ::ng-deep .article-body hr::before {
+  color: rgba(0, 0, 0, 0.2);
+  font-size: 1em;
+  display: block;
+  content: "* * *";
+  text-align: center;
+}
+
+:host ::ng-deep .article-entry {
+  color: #3d3d3f;
+  font-size: 16px;
+  line-height: 1.7em;
+  border-bottom: 2px dashed #eee;
+  letter-spacing: 1px;
+  padding-bottom: 1.5em;
+  margin-bottom: 3.5em;
+}

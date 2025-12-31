@@ -1,0 +1,17 @@
+<section class="mx-auto max-w-3xl px-[10rem] py-8 text-center">
+  <div *ngIf="loading" class="text-sm text-slate-600">加载中...</div>
+  <div *ngIf="!loading && error" class="text-sm text-red-600">{{ error }}</div>
+  <div *ngIf="!loading && !error && categories.length === 0" class="text-sm text-slate-500">暂无分类</div>
+
+  <div class="grid grid-cols-1 gap-4">
+    <a
+      *ngFor="let item of categories"
+      class="rounded border border-slate-200 px-4 py-3 text-left transition hover:border-[#3273dc] hover:bg-[#f6f9ff]"
+      [routerLink]="['/archive']"
+      [queryParams]="{ archive: item.name }"
+    >
+      <div class="text-[1.2rem] font-bold text-[#3273dc] tracking-[0.09375em]">{{ item.name }}</div>
+      <div class="mt-1 text-xs text-[#aaa]">{{ item.count }} 篇</div>
+    </a>
+  </div>
+</section>

@@ -1,0 +1,52 @@
+<section class="admin-page mx-auto max-w-5xl px-[10rem] py-6 space-y-4">
+  <div class="flex items-center justify-between text-sm text-slate-600">
+    <nav class="breadcrumbs">
+      <a routerLink="/" class="link">Home</a>
+      <span class="sep">/</span>
+      <a routerLink="/admin/posts" class="link">Admin</a>
+      <span class="sep">/</span>
+      <a routerLink="/admin/posts" class="link">Posts</a>
+      <span class="sep">/</span>
+      <span class="muted">{{ editingId ? 'Edit' : 'New' }}</span>
+    </nav>
+    <a routerLink="/admin" class="link font-semibold text-[#3273dc]">返回列表</a>
+  </div>
+
+  <form class="form" (ngSubmit)="save()" #articleForm="ngForm">
+    <div class="field">
+      <label>标题 *</label>
+      <input name="title" [(ngModel)]="form.title" required />
+    </div>
+    <div class="field">
+      <label>Slug</label>
+      <input name="slug" [(ngModel)]="form.slug" placeholder="可留空，自动拼音化" />
+    </div>
+    <div class="field">
+      <label>归档名称</label>
+      <select name="archiveSelect" [(ngModel)]="selectedArchive" (change)="onArchiveChange($event)">
+        <option value="">新建</option>
+        <option *ngFor="let a of archives" [value]="a">{{ a }}</option>
+      </select>
+      <input name="archive" [(ngModel)]="form.archive" placeholder="" />
+    </div>
+    <div class="field">
+      <label>状态</label>
+      <select name="status" [(ngModel)]="form.status">
+        <option value="draft">草稿</option>
+        <option value="published">已发布</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>内容</label>
+      <textarea name="bodyMd" [(ngModel)]="form.bodyMd" rows="12"></textarea>
+    </div>
+
+    <div class="actions-bar">
+      <span class="error" *ngIf="error">{{ error }}</span>
+      <div class="spacer"></div>
+      <button type="submit" class="btn primary" [disabled]="saving">
+        {{ saving ? '保存中...' : '保存' }}
+      </button>
+    </div>
+  </form>
+</section>

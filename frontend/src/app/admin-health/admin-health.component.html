@@ -1,0 +1,72 @@
+<section class="admin-page mx-auto max-w-5xl px-[10rem] py-6 space-y-4">
+  <div class="flex items-center justify-between text-sm text-slate-600">
+    <nav class="breadcrumbs">
+      <a routerLink="/" class="link">Home</a>
+      <span class="sep">/</span>
+      <a routerLink="/admin/posts" class="link">Admin</a>
+      <span class="sep">/</span>
+      <div class="crumb-dropdown" (mouseenter)="showMenu=true" (mouseleave)="showMenu=false">
+        <a routerLink="/admin/health" class="link inline-flex items-center gap-1">
+          Health <span class="text-xs">▾</span>
+        </a>
+        <div class="menu" *ngIf="showMenu">
+          <a class="menu-item" routerLink="/admin/posts">Posts</a>
+          <a class="menu-item" routerLink="/admin/archive">Archives</a>
+          <a class="menu-item" routerLink="/admin">Emails</a>
+          <a class="menu-item" routerLink="/admin">Memos</a>
+          <a class="menu-item" routerLink="/admin/health">Health</a>
+        </div>
+      </div>
+    </nav>
+    <button class="text-link" (click)="fetch()" [disabled]="loading">刷新</button>
+  </div>
+
+  <div *ngIf="loading" class="muted">加载中...</div>
+  <div *ngIf="!loading && error" class="error">{{ error }}</div>
+  <div *ngIf="!loading && data" class="space-y-4 text-sm text-slate-800">
+    <div>
+      <div class="section-title">系统</div>
+      <ul class="kv-list">
+        <li><span>CPU 使用率</span><span>{{ data.cpuPercent | number: '1.0-1' }}%</span></li>
+        <li><span>内存</span><span>{{ formatBytes(data.usedMemBytes) }} / {{ formatBytes(data.totalMemBytes) }}</span></li>
+        <li><span>磁盘</span><span>{{ formatBytes(data.diskUsedBytes) }} / {{ formatBytes(data.diskTotalBytes) }}</span></li>
+        <li><span>Uptime</span><span>{{ formatSeconds(data.uptimeSeconds) }}</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="section-title">进程</div>
+      <ul class="kv-list">
+        <li><span>RSS</span><span>{{ formatBytes(data.processRssBytes) }}</span></li>
+        <li><span>VMS</span><span>{{ formatBytes(data.processVmsBytes) }}</span></li>
+        <li><span>打开文件</span><span>{{ data.processOpenFds || 0 }}</span></li>
+        <li><span>Goroutines</span><span>{{ data.goroutines || 0 }}</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="section-title">数据库</div>
+      <ul class="kv-list">
+        <li><span>连接数</span><span>{{ data.dbOpen || 0 }}</span></li>
+        <li><span>空闲</span><span>{{ data.dbIdle || 0 }}</span></li>
+        <li><span>在用</span><span>{{ data.dbInUse || 0 }}</span></li>
+        <li><span>往返延迟</span><span>{{ data.dbLatencyMs === 0 || data.dbLatencyMs ? (data.dbLatencyMs | number: '1.0-1') + ' ms' : '-' }}</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="section-title">构建</div>
+      <ul class="kv-list">
+        <li><span>Go 版本</span><span>{{ data.goVersion || '-' }}</span></li>
+        <li><span>二进制大小</span><span>{{ formatBytes(data.binarySizeBytes) }}</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="section-title">缓存</div>
+      <ul class="kv-list">
+        <li><span>缓存条目</span><span>{{ data.cacheEntries || 0 }}</span></li>
+        <li><span>命中</span><span>{{ data.cacheHits || 0 }}</span></li>
+        <li><span>未命中</span><span>{{ data.cacheMisses || 0 }}</span></li>
+        <li><span>命中率</span><span>{{ ((data.cacheHitRate || 0) * 100) | number: '1.0-1' }}%</span></li>
+        <li><span>TTL</span><span>{{ data.cacheTtlSeconds || 0 }}s</span></li>
+      </ul>
+    </div>
+  </div>
+</section>

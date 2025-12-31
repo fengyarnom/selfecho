@@ -1,0 +1,33 @@
+<section class="mx-auto max-w-5xl space-y-6 px-[10rem] py-5">
+  <div *ngIf="loading" class="text-sm text-slate-600">加载中...</div>
+  <div *ngIf="!loading && error" class="text-sm text-red-600">{{ error }}</div>
+  <div *ngIf="!loading && !error && articles.length === 0" class="text-sm text-slate-500">暂无文章</div>
+
+  <article *ngFor="let article of articles" class="article-entry space-y-3">
+    <header class="space-y-1">
+      <h2 class="text-[1.6rem] font-semibold text-[#3d3d3f] py-2">{{ article.title }}</h2>
+      <p class="text-xs text-[#aaa] py-1">发布时间：{{ article.createdAt | date: 'yyyy-MM-dd HH:mm' }}</p>
+    </header>
+    <div class="article-body space-y-3 text-[16px] leading-8 text-[#3d3d3f] tracking-[0.0625em]" [innerHTML]="article.body"></div>
+  </article>
+
+  <div *ngIf="totalPages > 1" class="flex items-center justify-between pt-2 text-sm text-slate-700">
+    <button
+      type="button"
+      class="rounded border border-slate-200 px-3 py-1 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      (click)="prevPage()"
+      [disabled]="page === 1 || loading"
+    >
+      上一页
+    </button>
+    <span>第 {{ page }} / {{ totalPages }} 页</span>
+    <button
+      type="button"
+      class="rounded border border-slate-200 px-3 py-1 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      (click)="nextPage()"
+      [disabled]="page >= totalPages || loading"
+    >
+      下一页
+    </button>
+  </div>
+</section>

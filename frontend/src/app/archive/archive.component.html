@@ -1,0 +1,16 @@
+<section class="mx-auto max-w-3xl px-[10rem] py-8 text-center">
+  <div *ngIf="loading" class="text-sm text-slate-600">加载中...</div>
+  <div
+    *ngIf="selectedArchive"
+    class="mb-4 inline-flex rounded-[3px] bg-[#3273dc] px-3 py-1 text-sm font-semibold text-white"
+  >
+    {{ selectedArchive }}
+  </div>
+  <div *ngIf="!loading && error" class="text-sm text-red-600">{{ error }}</div>
+  <div *ngIf="!loading && !error && articles.length === 0" class="text-sm text-slate-500">暂无归档</div>
+
+  <div *ngFor="let article of articles" class="pb-6">
+    <div class="text-[1.4rem] font-bold text-[#3273dc] tracking-[0.09375em]">{{ article.title }}</div>
+    <div class="mt-2 text-xs text-[#aaa]">{{ article.createdAt | date: 'yyyy-MM-dd HH:mm' }}</div>
+  </div>
+</section>

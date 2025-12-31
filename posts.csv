@@ -1,0 +1,3221 @@
+id,title,slug,summary,content_md,status,published_at,category_id
+13,December 项目 1a 版本释出,2022-10-10-1620,"","## 开发
+December 总体采用前后端分离技术。  
+前端使用 React 、React-MU 和 基础前端构建语言，后端使用 FLask 和 Sqlite3 。
+
+目前已初步开发完成，并且将代码规模控制在一定范围，后端部分代码也进行了不同程度地优化，这将是一个可长期维护的项目。",draft,2022-10-10 08:20:00.000000 +00:00,71
+14,Rust 即将成为 linux 内核的第二语言,2022/10/11/1304,"","今天又看到了一则消息，2022年 Rust 将成为 Linux 内核第二官方语言。
+
+我认为这绝对是一个好消息。",published,2022-10-11 05:04:48.000000 +00:00,75
+28,博文转移完毕,2023/02/24/0056,"","由于之前的博客存储在了 sqlite3 数据库里，显然是没办法直接导入 Hexo 所识别的格式的，所以用 python 写了
+一个小脚本，方便博文的转移。
+
+```python
+import sqlite3
+from datetime import datetime
+conn = sqlite3.connect(""Hsunr.db"")
+cursor = conn.cursor()
+
+cursor.execute('select * from post')
+values = cursor.fetchall()
+for item in values:
+    file_name = ""{}-{}.md"".format(item[5],item[1].replace(' ','-'))
+    dt_obj = datetime.strptime(item[0], '%Y%m%d%H%M%S')
+    content = ""---\\n"" \\
+              ""title: {}\\n"" \\
+              ""date: {}\\n"" \\
+              ""tags:\\n"" \\
+              ""categories: {}\\n"" \\
+              ""---\\n""\\
+              ""{}"".format(item[1],dt_obj,item[3],item[2])
+    f = open(file_name,'w');
+    f.write(content)
+```",published,2023-02-23 16:56:03.000000 +00:00,71
+22,ARM 学习总结,2022/11/23/1113,"","### 二、寻址方式
+
+每种寻址方式可能还有其他的变形，但是在这一章中不做过多说明，会在下面对应的章节中给出。
+
+#### 寄存器寻址
+
+```assembly
+MOV R1,R2 ;R2 -> R1 
+```
+
+#### 立即寻址
+```assembly
+MOV R0,#0x123 ;0x123 -> R0 
+```
+
+#### 寄存器偏移寻址
+```assembly
+MOV R0,R1,LSL #2 ;R1 的值左移 2 位，结果送给R0，即 R2 * 4 -> R0 
+```
+可采用的移位操作如下：
+
+- **LSL**：逻辑左移（**Logical Shift Left**），寄存器中字的低端空出的位补 0
+- **LSR**：逻辑右移（**Logical Shift Right**），寄存器中字的高端空出的位补 0
+- **ASR**：算术右移（**Arithmetic Shift Right**），移位过程中保持符号位不变，即如
+  果源操作数为正数，则字的高端空出的位补 0，否则补 1
+- **ROR**：循环右移（**Rotate Right**），由字的低端移出的位填入字的高端空出的位
+- **RRX**：带扩展的循环右移（**Rotate Right eXtended by 1place**）,操作数右移一位，
+  高端空出的位用原 C 标志值填充。 
+
+#### 寄存器间接寻址
+```assembly
+LDR R0,[R1] ;将 R1 中的数值作为地址，将这个地址的值取出给R0
+```
+
+#### 基址寻址
+
+```assembly
+LDR R2,[R3,#0x0F] ;将 R3 中的数值加 0x0F 作为地址，取出此地址的数值保存在 R2 中 
+```
+
+#### 多寄存器寻址
+#### 堆栈寻址
+
+
+
+### 二、数据处理指令
+
+#### 快速查阅表
+
+| 编号 |       助记符号        |        说明         |             操作              |
+| :--: | :-------------------: | :-----------------: | :---------------------------: |
+|  0   |   MOV Rd ,operand2    |      数据转送       |          Rd←operand2          |
+|  1   |   MVN Rd ,operand2    |     数据非转送      |        Rd←(~operand2)         |
+|  2   |  ADD Rd,Rn operand2   |    加法运算指令     |        Rd←Rn+operand2         |
+|  3   |  SUB Rd,Rn operand2   |    减法运算指令     |        Rd←Rn-operand2         |
+|  4   |  RSB Rd,Rn operand2   |    逆向减法指令     |        Rd←operand2-Rn         |
+|  5   |  ADC Rd,Rn operand2   |     带进位加法      |     Rd←Rn+operand2+carry      |
+|  6   |  SBC Rd,Rn operand2   |   带进位减法指令    |   Rd←Rn-operand2-(NOT)Carry   |
+|  7   |  RSC Rd,Rn operand2   | 带进位逆向减法指令  |   Rd←operand2-Rn-(NOT)Carry   |
+|  8   |  AND Rd,Rn operand2   |   逻辑与操作指令    |        Rd←Rn&operand2         |
+|  9   |  ORR Rd,Rn operand2   |   逻辑或操作指令    |        Rd←Rn\\|operand2        |
+|  10  |  EOR Rd,Rn operand2   |  逻辑异或操作指令   |        Rd←Rn＾operand2        |
+|  11  |  BIC Rd,Rn operand2   |     位清除指令      |      Rd←Rn&(～operand2)       |
+|  12  |    CMP Rn,operand2    |      比较指令       | 标志 N、Z、C、V←Rn-operand2 C |
+|  13  |    CMN Rn,operand2    |    负数比较指令     |    N、Z、C、V←Rn＋operand2    |
+|  14  |    TST Rn,operand2    |     位测试指令      | 标志 N、Z、C、V←Rn＆operand2  |
+|  15  |    TEQ Rn,operand2    |    相等测试指令     | 标志 N、Z、C、V←Rn＾operand2  |
+|  16  |     MUL Rd,Rm,Rs      |    32 位乘法指令    |       Rd←Rm*Rs (Rd≠Rm)        |
+|  17  |    MLA Rd,Rm,Rs,Rn    |    32 位乘加指令    |      Rd←Rm*Rs+Rn (Rd≠Rm)      |
+|  18  | UMULL RdLo,RdHi,Rm,Rs | 64 位无符号乘法指令 |       (RdLo,RdHi)←Rm*Rs       |
+|  19  | UMLAL RdLo,RdHi,Rm,Rs | 64 位无符号乘加指令 | (RdLo,RdHi)←Rm*Rs+(RdLo,RdHi) |
+|  20  | SMULL RdLo,RdHi,Rm,Rs | 64 位有符号乘法指令 |       (RdLo,RdHi)←Rm*Rs       |
+|  21  | SMLAL RdLo,RdHi,Rm,Rs | 64 位有符号乘加指令 | (RdLo,RdHi)←Rm*Rs+(RdLo,RdHi) |
+
+在介绍指令之前，我们首先先来介绍影响CPSR中的一些标志位
+
+- V 溢出标志位
+- C 进位或借位标志位
+  - 对于加法指令（ADDS 和 CMN）如果产生进位，则C = 1
+  - 对于减法指令 （SUBS 和 CMP ）如果产生借位，则C = 0
+- Z 结果为0标志位
+  - Z = 1 表示运算结果是 0
+  - 同理
+
+- N 符号标志位
+  - N=1 表示运算结果为负数
+  - 同理 
+
+
+#### [0] MOV 数据转送指令
+
+ ```assembly
+ MOV{cond}{S} Rd,operand2 
+ 
+ MOV R1,#0x12 ;R1=0x12
+ MOV R2,R1,LSL #2 ;R2=R1 << 2
+ MOVS R3,R2,LSL #4 ;R3=R2 << 4,并影响标志位 
+ ```
+
+
+
+#### [1] MVN 数据非转送指令
+
+这个命令和MOV很像，只不过在传送之前，把操作数先取反了。
+
+在使用这个命令的时候，请不要忘记 **ARM 的寄存器是 32位的**
+
+```assembly
+MVN{cond}{S} Rd,operand2 
+
+MVN R1,#0xFF ;R1=0xFFFFFF00,这里的 0xFF 实际上是 0x000000FF
+```
+
+
+
+#### [2] ADD 加法运算指令
+
+```assembly
+ADD R1,R1,#0x13 ;R1 = R1 + 0x13
+ADDS R2,R1,#0x1 ;影响标志位
+```
+
+
+
+#### [3] SUB 减法运算指令指令
+
+```assembly
+SUB R0,R1,#0x12 ;R0=R1-0x12
+```
+
+
+
+#### [4] RSB  逆向减法指令
+
+```assembly
+RSB R3,R1,#0x12 ;R3=0x12-R1
+```
+
+
+
+#### [5] ADC  带进位加法 
+
+带进位加法指令.将 operand2 的数据与 Rn 的值相加,再加上 CPSR 中的 C 条件标志位.结果保存到 Rd 寄存器.
+
+由于寄存器是32位的，所以这个指令常用于计算64位加法。
+
+***这里需要注意的是，在进行 ADDS 运算的时候，如果出现了进位，CPSR中的 C=1，否则 C=0***
+
+**例如有这样的两个64位数：**
+
+**假设R0和R1构成一个64位数，R0存放低32位，R1存放高32位；R2，R3构成一个64位数，R2存放低32位，R3存放高32位.**
+
+计算的方法就是，先让两个低32位寄存器相加，为了得到可能的进位，需要用到ADDS，它能影响标志位
+
+接着使用ADC，两个高32位相加，再加上标志位中的C 进位
+
+```assembly
+LDR R0, =0XFFFFFFFF
+LDR R1, =0X12
+LDR R2, =0X1
+LDR R3, =0X2
+
+ADDS R0,R0,R2 ;R0 = R0 + R1 也就是0xFFFFFFFF + 0x1 这得到的是 0x00000000 ，因为溢出了，但是有进位 C = 1
+ADC R1,R1,R3 ; R1 = R1 + R3 也就是 0x12 + 0x2 + 1 得到 0x15
+```
+
+
+
+#### [6] SBC 带进位减法指令
+
+带进位减法指令。用寄存器 Rn 减去 operand2，再减去 CPSR 中的 C 条件标志位的反码
+
+***这里需要注意的是，在进行 SUBS 运算的时候，如果出现了借位，CPSR中的 C=0，否则 C=1***
+
+SBC与ADC指令类似，常用于计算64位的减法。
+
+ **例如有这样的两个64位数：**
+
+**假设R0和R1构成一个64位数，R0存放低32位，R1存放高32位；R2，R3构成一个64位数，R2存放低32位，R3存放高32位.**
+
+```assembly
+LDR R0, =0X12
+LDR R1, =0X9
+LDR R2, =0X32
+LDR R3, =0X2
+
+SUBS R0,R0,R2 ;R0 = R0 - R2 也就是 0x12 - 0x32 这将得到 0xFFFFFFE0 ,因为不够减，CPSR 中的 N=1，C=0
+SBC R1,R1,R3 ;R1 = R1 - R3 - !C 也就是 0x9 - 0x2 - !0 ，得到0x6
+```
+
+
+
+#### [7] RSC  带进位逆向减法指令
+
+用寄存器 operand2 减去 Rn,再减去 CPSR 中的 C 条件标志位的反码
+
+**例如有这样的两个64位数：**
+
+**假设R0和R1构成一个64位数，R0存放低32位，R1存放高32位；R2，R3构成一个64位数，R2存放低32位，R3存放高32位.**
+
+```assembly
+LDR R0, =0X12
+LDR R1, =0X9
+LDR R2, =0X32
+LDR R3, =0X2
+
+RSBS R0,R0,R2 ;R0 = R2-R0 也就是 0x32 - 0X12 这将得到 0x20 ,没有借位 ，CPSR 中的 N=1，C=1
+RBC R1,R1,R3 ;R1 = R3 - R2 - !C 也就是 0x2 - 0x9 - !1 ，得到0xFFFFFFF9
+```
+
+这里值得注意一下，在计算机中负数是用补码保存的。
+
+**2 - 9 = -7**
+
+这个 -7 的原码在八位寄存器中是 10000111 , 反码是 11111000,补码是 11111001 ，也就是0xF9 ，同理，在32位寄存器中就是 0xFFFFFFFF9 
+
+
+
+所以，在了解了SUBS 和 SBC 之后，**我们同样可以求出 64 位的负数**，和上面的例子是一样的
+
+**假设R0和R1构成一个64位数，R0存放低32位，R1存放高32位 ，求它的负数**
+
+```assembly
+LDR R0, =0X12
+LDR R1, =0X9
+
+RSBS R0,R0,#0 ;R0 = 0-R0 也就是 0 - 0X12 这将得到 0xFFFFFFEE ,有借位 ，CPSR 中的 N=1，C=0
+RBC R1,R1,#0 ;R1 = 0- R1 - !C 也就是 0 - 0x9 - !0 ，得到0xFFFFFFF6
+```
+
+
+
+这里还是算一下，-10 的 补码
+
+在八位寄存器中，-10 的原码表示是 1000 1010 ,反码表示是 1111 0101,补码表示是 1111 0110 ,也就是0xF6
+
+在32位寄存器中的表示就是,0xFFFF FFF6
+
+
+
+#### [8] AND 逻辑与操作指令
+
+```assembly
+AND R0,R1,R2 ;R0=R1&R2
+```
+
+
+
+#### [9] ORR 逻辑或操作指令
+
+```assembly
+ORR R0,R1,R2 ;R0=R1|R2
+```
+
+
+
+#### [10] EOR 逻辑异或操作指令
+
+#### [11] BIC 位清除指令
+
+位清除指令.将寄存器Rn的值与operand2的值的反码按位作逻辑与操作,结果保存 到 Rd 中
+
+
+
+#### [12] CMP 比较指令
+
+本质是 做减法 ,结果一定影响标志位
+
+```assembly
+CMP R1,R2 ;R1-R2
+```
+
+
+
+#### [13] CMN 负数比较指令
+
+本质是 做加法 ,结果一定影响标志位
+
+```assembly
+CMN R1,R2 ;R1+R2
+```
+
+
+
+#### [14] TST 位测试指令
+
+指令将寄存器Rn的值与operand2的值按位作逻辑与操作,根据操作的 结果理新 CPSR 中相应的条件标志位
+
+````ass
+TST R0,#0x1 ;判断 R0 的最低位是否为 0
+````
+
+
+
+#### [15] TEQ 位相等测试指令
+
+指令寄存器Rn的值与operand2的值按位作逻辑异或操作,根据操作 的结果理新 CPSR 中相应条件标志位
+
+```assembly
+TEQ R0,R1 ;比较 R0 与 R1 是否相等 ,与用cmp命令对比，它不影响(不影响 V 位和 C 位）
+```
+
+
+
+#### [16] MUL 32 位乘法指令
+
+指令将 Rm 和 Rs 中的值相乘,结果的低 32 位保存到 Rd 中
+
+**MUL{cond}{S} Rd,Rm,Rs**
+
+```assembly
+MUL R1,R2,R3 ;R1=R2×R3
+MULS R1,R2,R3 ;R0=R2×R3,同时设置 CPSR 中的 N 位和 Z 位
+```
+
+
+
+#### [17] MLA  32 位乘加指令
+
+指令将 Rm 和 Rs 中的值相乘,再将乘积加上第 3 个操作数,结果的低 32 位保存到 Rd 中
+
+**MLA{cond}{S} Rd,Rm,Rs,Rn** 
+
+```ASS
+MLA R1,R2,R3,R4 ;R1=R2×R3+R4 
+```
+
+
+
+#### [18] UMULL 64 位无符号乘法指令
+
+**U即 Unsigned 无符号**
+
+指令将 Rm 和 Rs 中的值作无符号数相乘,结果的低 32 位保存 到 RsLo 中,而高 32 位保存到 RdHi 中
+
+**UMULL{cond}{S} RdLo,RdHi,Rm,Rs** 
+
+```assembly
+UMULL R0,R1,R2,R3 ;(R1:R0)=R2×R3 ;相当于 R0 = (R2*R3) 的低32位,R1 = (R2*R3) 的高32位
+```
+
+
+
+#### [19] UMLAL 64 位无符号乘加指令
+
+**U即 Unsigned 无符号**
+
+指令将 Rm 和 Rs 中的值作无符号数相乘,64 位乘积与 RdHi,RdLo 相加,结果的低 32 位保存到 RdLo 中,而高 32 位保存到 RdHi 中.
+
+**UMLAL{cond}{S} RdLo,RdHi,Rm,Rs**
+
+```assembly
+UMLAL R0,R1,R2,R3 ;(R1,R0)=R2×R3+(R1,R0) ;相当于 R0 = (R2*R3) 的低32位 + R0,R1 = (R2*R3) 的高32位+ R1
+```
+
+
+
+#### [20] SMULL 64 位有符号乘法指令
+
+**S即 Signed 有符号**
+
+指令将 Rm 和 Rs 中的值作有符号数相乘,结果的低 32 位保存 到 RdLo 中,而高 32 位保存到 RdHi 中
+```assembly
+SMULL R0,R1,R2,R3 ;(R1:R0)=R2×R3 ;相当于 R0 = (R2*R3) 的低32位,R1 = (R2*R3) 的高32位
+```
+
+
+
+#### [21] SMLAL 64 位有符号乘加指令
+
+指令将 Rm 和 Rs 中的值作有符号数相乘,64 位乘积与RdHi,RdLo,相加,结果的低 32 位保存到 RdLo 中,而高 32 位保存到 RdHi 中.
+
+```assembly
+SMLAL R0,R1,R2,R3 ;(R1,R0)=R2×R3+(R1,R0) ;相当于 R0 = (R2*R3) 的低32位 + R0,R1 = (R2*R3) 的高32位+ R1
+```
+
+
+
+### 三、ARM分支指令
+
+在了解分支指令之前，我们首先得去了解一下**条件码**，否则我们就会没办法正确使用分支指令
+
+在此给出条件码表格
+
+| 条件码助记符 |                    英文含义，助记符来源                    | 查看的标志 |          中文含义          |
+| :----------: | :--------------------------------------------------------: | :--------: | :------------------------: |
+|      EQ      |                         **Eq**ual                          |    Z＝1    |            相等            |
+|      NE      |                     **N**ot **e**qual.                     |    Z＝0    |           不相等           |
+|    CS/HS     |  Unsigned **h**igher or **s**ame (or **c**arry **s**et).   |    C=1     | 无符号数大于或等于/C位设置 |
+|    CC/LO     |        Unsigned **lo**wer (or **c**arry **c**lear).        |    C=0     |    无符号数小于/C位清除    |
+|      MI      |       Negative. The mnemonic stands for ""**mi**nus"".       |    N=1     |            负数            |
+|      PL      |   Positive or zero. The mnemonic stands for ""**pl**us"".    |    N=0     |          正数或零          |
+|      VS      |   Signed overflow. The mnemonic stands for ""**V s**et"".    |    V=1     |        溢出/V位设置        |
+|      VC      | No signed overflow. The mnemonic stands for ""**V c**lear"". |    V=0     |     没有溢出 /V位清除      |
+|      HI      |                    Unsigned **hi**gher.                    |  C=1，Z=0  |        无符号数大于        |
+|      LS      |              Unsigned **l**ower or **s**ame.               |  C=0，Z=1  |     无符号数小于或等于     |
+|      GE      |           Signed **g**reater than or **e**qual.            |    N=V     |     带符号数大于或等于     |
+|      LT      |                 Signed **l**ess **t**han.                  |    N!=V    |        带符号数小于        |
+|      GT      |                Signed **g**reater **t**han.                |  Z=0，N=V  |        带符号数大于        |
+|      LE      |             Signed **l**ess than or **e**qual.             | Z=1，N！=V |     带符号数小于或等于     |
+|      AL      |                      Always executed.                      |    任何    | 无条件执行（指令默认条件） |
+
+
+
+#### 快速记忆方法：
+
+我们必须得结合英文才能快速地记住这些**“助记符”**
+
+***尤其是无符号和有符号之间的比较。***
+
+无符号一般会使用 **Lower 和 Higher**和 **Same**，有符号一般会使用 **Greater than** 和 **Less than** 和 **Equal**，
+
+所以，**无符号的大于等于** HS = Higher + Same ，**无符号小于等于** LS = Lower + Same ，**无符号大于 HI** = Higher（前两个字母）,**无符号小于** LO = Lower
+
+同理的，**有符号大于等于** GE = Greater + Equal ,**有符号小于等于** LE = Less + Equal, **有符号大于**就是 GT = Greater + Than ，**有符号小于**就是 LT = Less + Than
+
+
+
+所以，通过这个英文可以很快速地就记住。
+
+
+
+#### 跳转分支指令
+
+接下来，我们来说一下跳转指令，同样的，给出跳转指令快速查阅表：
+
+|  助记符  |         说明         |         操作          |
+| :------: | :------------------: | :-------------------: |
+| B label  |       跳转指令       |       PC←label        |
+| BL label |   带链接的跳转指令   |   LR←PC-4, PC←label   |
+|  BX Rm   | 带状态切换的跳转指令 | PC←label,切换处理状态 |
+
+
+
+#### [1] B 跳转指令
+
+**B{cond} label** 
+
+```assembly
+B LOOP_Y1 ;跳转到 LOOP_Y1 标号处
+```
+
+
+
+#### [2] BL  带链接的跳转指令
+
+**BL{cond} label** 
+
+这个跳转的操作是：**LR←PC-4, PC←label**，由于将PC地址保持到了LR寄存器里面，所以之后还能跳转回来
+
+
+
+#### [3] BX 带状态切换的跳转指令
+
+略
+
+
+
+### 四、加载和存储指令
+
+**Load and Store with register offset.**
+
+他们最基础的指令是 LDR 和 STR，以下先给出这两个基础指令的用法：
+
+| 助记符             | 说明       | 操作            |
+| ------------------ | ---------- | --------------- |
+| LDR Rd, addressing | 加载字数据 | Rd←[addressing] |
+| STR Rd, addressing | 存储字数据 | [addressing]←Rd |
+|                    |            |                 |
+
+#### 寄存器间接寻址
+
+```
+LDR R0,[R1]	;R0 <- [R1]
+STR R0,[R1] ;[R1] <- R0
+```
+
+
+
+#### 基址加变址寻址
+
+这里有几种方式，前变址法、后变址法、自动变址
+
+- 前变址法，也就是先变化地址，再根据这个地址 存取。
+
+  ```assembly
+  LDR R0,[R1,#4]	;R0 <- [R1 + 4]
+  ```
+
+- 后变址，也就是先存取，再变化地址
+
+  ```assembly
+  LDR R0,[R1],#4	;R0 <- [R1] 然后 R1<-R1+4
+  ```
+
+- 自动变址，综合上面两种，加一个 感叹号 ！
+
+  ```assembly
+  LDR R0,[R1,#4]!	;R0 <- [R1 + 4] 然后 R1<-R1+4
+  ```
+
+STR 指令也是同理的，这里不再赘述。
+
+在理解了基础指令之后，我们可以尝试去看看这两个指令的更多用法：
+
+以下依旧给出速查表：
+
+| 助记符               | 说明                       | 操作            |
+| -------------------- | -------------------------- | --------------- |
+| LDR Rd, addressing   | 加载字数据                 | Rd←[addressing] |
+| LDRB Rd,addressing   | 加载无符字节数据           | Rd←[addressing] |
+| LDRT Rd，addressing  | 以用户模式加载字数据       | Rd←[addressing] |
+| LDRBT Rd，addressing | 以用户模式加载无符号字数据 | Rd←[addressing] |
+| LDRH Rd，addressing  | 加载无符半字数据           | Rd←[addressing] |
+| LDRSB Rd，addressing | 加载有符字节数据           | Rd←[addressing] |
+| LDRSH Rd，addressing | 加载有符半字数据           | Rd←[addressing] |
+|                      |                            |                 |
+| STR Rd，addressing   | 存储字数据                 | [addressing]←Rd |
+| STRB Rd，addressing  | 存储字节数据               | [addressing]←Rd |
+| STRT Rd，addressing  | 以用户模式存储字数据       | [addressing]←Rd |
+| SRTBT Rd，addressing | 以用户模式存储字节数据     | [addressing]←Rd |
+| STRH Rd，addressing  | 存储半字数据               | [addressing]←Rd |
+
+
+
+虽然看起来蛮多的，但主要就是 
+
+- 后缀带有B的，是无符字节数据
+- 后缀带有H的，是无符半字数据
+- 后缀带有SB的，是有符号字节数据
+- 后缀带有SH的，是有符号半字数据
+
+因为 字节是**B**yte ，半字是**H**alf Word，有符号是 **S**igned
+
+
+
+### 五、加载和存储指令LDM 和 STM 批量加载和批量存储分析
+
+这一段内容来自 http://blog.chinaunix.net/uid-29401328-id-5059312.html 
+
+这里是简单地进行搬运。
+
+#### 普通用法和堆栈用法
+
+
+
+> 当LDM/STM没有被用于堆栈，而只是简单地表示地址前向增加，后向增加，前向减少，后向减少时，由IA,IB,DA,DB控制。
+
+- IA   ---->   Increment   After   每次传送后地址加4
+- IB   ---->   Increment   Before   每次传送前地址加4
+- DA   ---->   Decrement   After   每次传送后地址减4    
+- DB   ---->   Decrement   Before   每次传送前地址减4
+
+> 堆栈请求格式，FD,ED,FA,EA定义了前/后向索引和上/下位
+>
+> F,E表示堆栈满或者空。
+> A 和 D 定义堆栈是递增还是递减，如果递增，STM将向上，LDM向下，如果递减，则相反。
+
+- FA   ---->   Full   Ascending     满递增堆栈     
+- FD   ---->   Full   Descending     满递减堆栈 
+- EA   ---->   Empty   Ascending   空递增堆栈    
+- ED   ---->   Empty   Descending   空递减堆栈
+
+
+
+#### 普通用法
+
+```assembly
+STMIA R0!,{R1,R3,R5}
+LDMDB R0!,{R1-R3}
+```
+
+保存的时候使用了 IA  **后增加**的方式，取的时候就得用 DB **先减少** 的方式
+
+这个例子的R0指向一段基地址
+
+
+
+#### 堆栈用法
+
+1. Full descending 满递减堆栈——FD 堆栈首部是高地址，堆栈向低地址增长。栈指针总是指向堆栈**最后一个元素**（最后
+   一个元素是最后压入的数据）。ARM-Thumb过程调用标准和ARM、Thumb C/C++ 编译器总是使用Full descending 类型堆栈。
+
+2. Full ascending 满递增堆栈——FA 堆栈首部是低地址，堆栈向高地址增长。栈指针总是指向堆栈**最后一个元素**（最后
+   一个元素是最后压入的数据）。
+
+3. Empty descending 空递减堆栈——ED 堆栈首部是高地址，堆栈向低地址增长。栈指针**总是指向下一个将要放入数据的空位置**。
+
+4. Empty ascending 空递增堆栈——EA 堆栈首部是低地址，堆栈向高地址增长。栈指针**总是指向下一个将要放入数据的空位置**。
+
+ **A 和D 定义堆栈是递增还是递减，如果递增，STM将向上，LDM向下，如果递减，则相反。**
+
+**所以，LDMFD和STMFD是成对使用，因为堆栈方式和出栈方式要是相同的**
+
+
+
+### 六、ARM 伪指令
+
+| 伪指令助记符                        | 说明                     | 操作                                       |
+| ----------------------------------- | ------------------------ | ------------------------------------------ |
+| ADR{cond} register,exper            | 小范围的地址读取伪指令   | register<-expr 指向的地址                  |
+| ADRL {cond} register,exper          | 中等范围的地址读取伪指令 | register<-expr 指向的地址                  |
+| LDR{cond} register,=expr/label_expr | 大范围的地址读取伪指令   | register<-expr/label-expr 指定 的数据/地址 |
+| NOP                                 | 空操作伪指令             |                                            |
+
+
+
+### 七、简单介绍数据定义伪指令
+
+#### 1、DCB  分配一段字节的内存单元
+
+**{label} DCB expr{,expr}{,expr}…**
+
+```
+A	
+	DCB 0x11,0x22,0x33,0x44 
+	DCB 0x55,0x66,0x77,0x88
+	DCB ""Hello World""
+	DCB ""ABCDEFGHIJKLMN"",0
+```
+
+
+
+#### 2 、DCW 和 DCWU 分配一段半字的内存单元
+
+DCWU 需要半字对齐
+
+```assembly
+B	
+	DCW 0x1122,0x3344,0x5566,0x7788
+
+```
+
+
+
+
+
+#### 3、 DCD 和 DCDU 分配一段字内存单元
+
+DCD 需要字对齐
+
+```assembly
+C	
+	DCW 0x11223344,0x55667788,0x99aabbcc,0xddeeff00
+```
+
+
+
+#### 4、SPACE 分配一片连续的字节内存单元，并初始化为0
+
+**{label} SPACE expr**
+
+```assembly
+D
+	Space 500 ;分配 500 字节空间,并初始化为0
+```
+
+
+
+### 八、汇编程序设计
+
+#### 程序 1 、使用跳转完成函数功能
+
+首先，我们先来一个简单的跳转指令：
+
+```assembly
+	...					;之前的一些操作
+	BL ADD_FUNCTION		;带连接的跳转，LR <- PC -4 ,PC <- ADD_FUNCTION
+	...					;完成ADD_FUNCTION 这个函数的操作
+	...					
+ADD_FUNCTION
+	...					;一些操作
+    MOV PC,LR			;函数返回，相当于RET、Return，总之就是 PC <- LR
+```
+
+
+
+下面这个例子是老师给的：
+
+**设计一个函数，计算R0 和 R1 的值**
+``` assembly
+	AREA Example1,CODE,READONLY
+	ENTRY
+start
+	LDR R0,=0X66
+	LDR R1,=0X88
+	BL ADD_FUNCTION		;带链接跳转
+	B RETURN			;跳到结束位置	
+ADD_FUNCTION
+	ADD R0,R0,R1
+	MOV PC,LR
+RETURN	
+	END
+```
+
+
+
+#### 程序 2 、计算数组第1项和第5项之和，并将结果保存在第9项中
+
+```assembly
+	AREA Example1,CODE,READONLY
+	ENTRY
+start
+	LDR R0,=ARRAY
+	LDR R1,[R0]
+	LDR R2,[R0,#16]
+	ADD R1,R1,R2
+	
+	STR R1,[R0,#32]
+	
+
+ARRAY
+	DCD 0X11,0X22,0X33,0X44
+	DCD 0X55,0X66,0X77,0X88
+	DCD 0X00,0X00,0X00,0X00
+	END
+```
+
+
+
+#### 程序 3、编写一个分支程序段，如果R5中的值等于10，就把R5中的数据存入R1，否则就把R5中的数据分别存入寄存器R0和R1
+
+```assembly
+	AREA Example1,CODE,READONLY
+	ENTRY
+start
+	MOV R5,#9
+	CMP R5,#10 
+	MOVNE R0,R5
+	MOV R1,R5
+	END
+```
+
+
+
+#### 程序 4、编写一个程序段，当R1中的数据大于R2中的数据时，将R2中的数据加10存入R1中，否则将R2中的数据加5存入R1中
+
+```assembly
+	AREA Example1,CODE,READONLY
+	ENTRY
+start
+	MOV R1,#10
+	MOV R2,#5
+	CMP R1,R2
+	ADDHI R1,R2,#10
+	ADDLS R1,R2,#5
+	END
+```
+
+还记得吗？
+
+> 无符号一般会使用 **Lower 和 Higher**和 **Same**，有符号一般会使用 **Greater than** 和 **Less than** 和 **Equal**，
+>
+> 所以，**无符号的大于等于** HS = Higher + Same ，**无符号小于等于** LS = Lower + Same ，**无符号大于 HI** = Higher（前两个字母）,**无符号小于** LO = Lower
+>
+> 同理的，**有符号大于等于** GE = Greater + Equal ,**有符号小于等于** LE = Less + Equal, **有符号大于**就是 GT = Greater + Than ，**有符号小于**就是 LT = Less + Than
+
+
+
+#### 程序 5、循环，将 src 中的10个字节的数据，传送到 dst 开始的区域
+
+```assembly
+	AREA init,CODE,READONLY
+	ENTRY
+start
+	LDR R0,=src
+	LDR R1,=dst
+	MOV R2,#0
+
+LOOP
+	LDRB R3,[R0,R2]
+	STRB R3,[R1,R2]
+	
+	ADD R2,R2,#1
+	CMP R2,#10
+	BLO LOOP
+	
+src
+	DCB ""0123456789""
+dst
+	DCB ""aaaaaaaaaa""
+	
+	END
+```
+
+
+
+#### 程序 6、循环，将src中的所有小写字母变成大写字母，其他的ASCII码不变
+
+我们需要知道 ascii 码中，
+
+A的十六进制是41，能够推出Z的十六进制是5A 
+
+a的十六进制是61，能够推出z的十六进制是7A
+
+
+
+```assembly
+	AREA init,CODE,READONLY
+	ENTRY
+start
+	LDR R0,=src
+	MOV R1,#0
+
+LOOP
+	LDRB R2,[R0,R1]
+	CMP R2,#0X61
+	BLO NEXT
+	CMP R2,#0X7A
+	SUBLS R2,R2,#0X20
+	STRBLS R2,[R0,R1]
+	
+NEXT
+	ADD R1,R1,#1
+	CMP R1,#10
+	BNE LOOP
+	
+src
+	DCB ""AabCdEfghI""
+	END
+```
+
+
+
+#### 程序 7、循环，将src中的所有大写字母变成小写字母，其他的ASCII码不变
+
+和上一题同理
+
+```assembly
+	AREA init,CODE,READONLY
+	ENTRY
+start
+	LDR R0,=src
+	MOV R1,#0
+
+LOOP
+	LDRB R2,[R0,R1]
+	CMP R2,#0X41
+	BLO NEXT
+	CMP R2,#0X5A
+	ADDLS R2,R2,#0X20
+	STRBLS R2,[R0,R1]
+	
+NEXT
+	ADD R1,R1,#1
+	CMP R1,#10
+	BNE LOOP
+	
+src
+	DCB ""AabCdEfghI""
+	END
+```",published,2022-11-23 03:13:27.000000 +00:00,64
+25,生日生日,2022/12/10/1503,"",祝自己生日快乐！！！！,published,2022-12-10 07:03:49.000000 +00:00,75
+70,粉粉的花,2025-07-01-1037,"","最近入手了一枚老胶片微距镜头——尼康 55mm F2.8。原本打算用来翻拍胶片，但翻拍流程需要的支架和工具还没凑齐，所以暂时先拿它拍些花草。
+
+这张照片是我目前觉得最好的一张：色彩和景深都很理想。微距镜头能贴近被摄物“怼拍”，画面质感很好。不过，这类全手动镜头在对焦时确实麻烦。拍摄时在相机的小屏幕上看着似乎没问题，但等到回到家在电脑上放大细看，却常常一眼就发现对焦没准。
+![P1000115.jpg](https://s2.loli.net/2025/09/18/PLfQAx6He9mYKkw.jpg)
+
+我的机身是松下 G97，它的绿色表现一向讨喜，不愧于被大家称作“松下绿”。而老胶片镜头自带一种油润柔和的质感，两者叠加在一起，让绿色既不显得过度饱和，又能保持层次与通透。画面中那种微微克制的绿，既真实又舒适，肉眼看上去格外耐看。
+
+或许这也是老镜头和数码机身的奇妙互补：一个提供了温润的调性，一个保留了细节的锐利。拍出来的照片，既有现代的清晰，又带点复古的韵味。
+![P1000225.jpg](https://s2.loli.net/2025/09/19/CLf9ajBxEZu8gMG.jpg)
+比较可惜的是，这一张其实对焦失败了，这次焦点却落在了后面的叶子上。
+![P1000278.jpg](https://s2.loli.net/2025/09/19/kzgmaVB1MRJdZyU.jpg)
+![P1000266.jpg](https://s2.loli.net/2025/09/19/79yk6wBmPuh4seW.jpg)
+
+",published,2025-07-02 18:37:00.000000 +00:00,80
+29,大三下学期,2023/02/24/2325,"","时间真的过得很快，大一时会在校园迷路的我如今也在面临考研或者直接工作的两个方向，如今的倾向是考研，因为随着 Google 、字节 这些大厂的裁员情况来看，互联网行业并不景气，加之 AI 的高速发展，低技术人员被快速淘汰，可能，提升自己的学历会是一个更好的选择。
+
+
+
+我的选择是广西大学，这是一个计算机 B- 的学校，综合下来是很适合我的情况的。",published,2023-02-24 15:25:19.000000 +00:00,75
+36,2023-03-31 英语翻译练习,2023-03-31-1320,"","Studying for a graduate exam can be challenging, but with the right mindset and study strategies, it can be manageable. It's important to prioritize your time, focusing on your weak areas while also reviewing what you already know. Practice exams can be helpful in identifying areas for improvement and getting a sense of the exam format. Additionally, developing good study habits, such as taking breaks and getting enough sleep, can increase your overall productivity and retention of material. Remember to stay motivated and keep a positive attitude, as this will help you stay focused and achieve your goals.
+
+备考研究生考试可能是具有挑战性的，但是只要拥有正确的心态和学习策略，就可以应对。重要的是要优先考虑时间，专注于自己的薄弱领域，同时复习已经掌握的知识。模拟考试可以帮助您确定需要改进的方面，并了解考试的格式。此外，养成良好的学习习惯，如休息和充足的睡眠，可以提高您的总体生产力和记忆材料的能力。记住要保持动力和积极的态度，因为这将帮助您保持专注，实现自己的目标。
+
+prioritize - 优先考虑
+weak areas - 薄弱领域
+retention - 记忆
+productivity - 生产力/工作效率
+positive attitude - 积极态度",draft,2023-03-31 05:20:00.000000 +00:00,78
+71,台风桦加沙带来的一丝缓息,2025-09-26-0846,"","2025 年 9 月 23 日，广州因超强台风“桦加沙”的影响，政府发布了“五停”措施。公司随后也宣布提前下班买菜，并在次日启用居家办公。
+
+当天下班路上，人流明显比平时更多。社交媒体上不断传出市民排队抢购食物、囤积物资的视频。其中最让我忍俊不禁的一幕是：超市的货架几乎被清空，唯独火鸡面无人问津。不得不说，对于我们两广人来说，火鸡面的辣度确实是另一种“自然灾害”。我曾经买过一包粉色包装的奶油味火鸡面，好吃是真的好吃，辣也是真的辣。那次尝试直接让我真切地体验到了第二台 “辣屁股” 的感觉 :(
+
+9 月 24 日下午 5 点左右，桦加沙在广东阳江海陵岛登陆。在此之前，它已横扫菲律宾、台湾和香港，当地媒体报道了人员失踪和死亡的消息。
+
+因为公司最近在做气象相关的产品，我对台风的动态格外关注。预防可能的停水、停电，我提前把充电宝充满，囤好了矿泉水、泡面，还有一些果冻和零食。提前准备让我省去了排长龙的麻烦。
+
+在南方，尤其是两广地区，一年四季都很炎热。普通的雷阵雨往往只会让空气更加湿热，但台风不同，它能吹来强劲而凉爽的风，驱散酷暑。更重要的是，台风的强度与破坏力，往往会让两广地区隔几年就迎来一次“台风假”。孩子不用上学，大人不用上班。归根到底，这份喜悦的核心，其实很简单——假期。
+
+不仅是我，许多社交媒体上的人也表现出相同的快乐。有人晒出冰箱里堆满的食物，有人展示窗户上贴好的米字胶带。因为停工停课，一家人竟能在饭桌前齐聚，等着一起“迎接”台风的到来。那种场景，和过年有几分相似：大人买菜做饭，小孩在一旁玩闹，屋子里人气十足，热闹非凡。
+
+### 为什么台风假会让人快乐？
+问题是：假期不是很常见的吗？为什么台风假会显得如此特别？
+
+在在中国，在两广，假期并不常见。周末和法定节假日看似存在，但往往被工作侵蚀。与“休闲文化”相比，中国人更习惯的是“加班文化”“能吃苦”。这里面有深刻的历史背景。
+
+改革开放之前，国家层面的人祸带来了三年大饥荒，各地饿殍遍地，广西甚至出现人相食的惨况。改革开放后，广东成为对外交流的前沿，也因此诞生了“血汗工厂”。全国各地的人汇聚广东，像是人矿被一铲一铲投进炉火里燃烧。
+
+饥饿与贫穷的记忆刻进了几代人的内心，塑造了一种行为逻辑：能吃苦就是美德。这种逻辑延续到今天，“先有国后有家，先有长城后有砖头”奇怪逻辑，让数代人深陷集体主义的狂热。红卫兵的批判和斗争席卷过中国大地，精神污染留下的痕迹至今未消。
+
+这一切造就了一个悖论：人们在这样的环境里长大，却被剥夺了理解“爱”的能力。他们学会了牺牲、学会了忍耐，却很少学会如何去爱。爱本该是一种过程，而非结果。
+
+所以，当台风假出现，它的意义远不止是“放假”。它是一种外力迫使的暂停，一次难得的、没有负罪感的休息。因为这是自然灾害造成的，而不是个人“偷懒”。人们终于能短暂地抽离集体主义的工作逻辑，拥有属于自己的时间。
+
+这种快乐，其实是一种讽刺。我们为灾难带来的凉风和停工而欢呼，背后却是社会常态的失衡。一个正常的社会，本不该依靠台风，才能让人们得到休息、与家人团聚。",draft,2025-09-26 08:46:00.000000 +00:00,
+40,dwm 和 st 的安装及补丁,2023/05/05/1559,"","## 前言
+
+得益于近些日子在学校深入学习了很多关于 Linux 的知识，加之之前也多次重装过 Arch ，这些因素综合起来后，这一次的系统安装可以说颇为顺畅，之前因无法理解的地方而导致难以下手的操作，所赖知识见长，逐渐克服且熟练了起来。
+
+本次为了更加深入地去学习 Linux ，所以放弃了像 Gnome 这样简单易用的桌面环境, 而是使用像 DWM 这样更简单的窗口管理器，虽然是自找麻烦，但我也乐在其中，我会在本文中简略地记录下折腾的过程。
+
+## DWM 和 st 的安装
+
+事实上安装 DWM 非常的简单，自需要从 suckless 官网下载源码文件即可。
+```bash
+
+$ git clone git://git.suckless.org/dwm
+$ cd dwm
+$ make
+# sudo make install
+
+```
+
+编译安装后，我这里是通过 xrog 的 `.xinitrc` 从 tty 终端使用 `startx` 命令启动的：
+```bash
+exec dwm
+```
+
+启动之后的第一眼就是简陋，目前还什么都干不了，因为我甚至还没安装终端，suckless 也提供了一个 xrog 下的终端实现，叫 `st` 。
+通过魔法键回到 tty （ps.当然也可以通过快捷键：`Alt`  `+` `Shift` `+` `Q` 退出 dwm )，通过 tty 的终端去下载 st 源码。
+
+同样也是通过源码安装：
+```bash
+$ git clone https://git.suckless.org/st
+$ cd st
+$ make
+# sudo make install
+```
+编译安装完后，在dwm便应该通过`Alt` `+` `Shift` `+` `Enter` 组合键启动 `st` 管终端。但是毫无疑问，也是十分简陋，甚至字体小到无法看清……
+
+
+不过问题不大，我学过 C ，源码文件是能看懂的，首先就是修改了字体大小，顺带一提我还通过 pacman 包管理下载了 [ttf-fira-code] 字体。
+
+首先来修改一下 dwm 的字体和其大小：
+
+```c
+# dwm > config.h
+
+static const char *fonts[]          = { ""Fira Code:size=14"" };
+static const char dmenufont[]       = ""Fira Code:size=14"";
+
+```
+保存后通过 `sudo make clean install` 命令安装即可
+
+接着修改 st 终端的字体和大小：
+
+```c
+# st > config.h
+
+static char *font = ""Fira Code:style=Bold:pixelsize=23:antialias=true:autohint=true"";
+```
+
+保存后通过 `sudo make clean install` 命令安装即可
+
+这样修改完后，便好看很多了。
+
+## 安装 dmenu 
+
+这个就是 suckless 的程序托盘？
+总之，安装后，可以快速打开程序，也是蛮好的，这个就没有使用源码安装了，不过听说它也有很多好玩之处，之后再研究吧，总之 dmenu 通过包管理器安装：
+
+```bash
+$ sudo pacman -S dmenu
+```
+
+## 给 dwm 打补丁
+Dwm 目前其实足够我使用了， 这里就打一个透明补丁: 「 [alpha.diff](https://dwm.suckless.org/patches/alpha/dwm-alpha-20201019-61bb8b2.diff
+)  」
+
+```bash
+$ wget https://dwm.suckless.org/patches/alpha/dwm-alpha-20201019-61bb8b2.diff
+$ patch p1 < dwm-alpha-20201019-61bb8b2.diff
+ 
+```
+通过 `patch` 命令 把补丁打进去即可，之前我都没怎么用过这个 patch 命令，用多了其实也还好，出现错误了，手动去修改源文件即可。
+
+## 给 st 打补丁
+这里打了好几个补丁：
+- 「 [st-alpha-20220206-0.8.5.diff](https://st.suckless.org/patches/alpha/st-alpha-20220206-0.8.5.diff)  」 这是改变st透明度的补丁。
+- 「 [st-scrollback-20210507-4536f46.diff](https://st.suckless.org/patches/scrollback/st-scrollback-20210507-4536f46.diff) 」这是让 st 终端支持回滚（按键支持）
+- 「 [st-scrollback-mouse-20220127-2c5edf2.diff](https://st.suckless.org/patches/scrollback/st-scrollback-mouse-20220127-2c5edf2.diff) 」这是回滚的鼠标滚轮支持(ps.需要先安装scrollback 补丁)
+
+也是一样地通过 `patch` 命令打进去，这里就不再赘述了。
+
+## 安装 picom 
+这是一个合成管理器，可以给窗口管理器带来需要效果，比如透明、阴影，上面的透明补丁也需要它的安装才能真正起作用。
+
+```bash
+$ sudo pacman -S picom
+```
+
+安装完后，编辑 ` ~/.xinitrc ` 文件,进程让它以 Daemon（后台） 的形式运行。
+```bash
+compton -b
+```
+
+（未完待续）",published,2023-05-05 07:59:30.000000 +00:00,69
+43,V2ray 搭建与配置记录,2023/05/22/1234,"","## 前言
+近来想纯净自己的ip，同时也想试着搭建 v2ray 服务供以自己代理使用，所以上两个星期便购买了一台 Vultr 的 VPS。出现了一些问题，同时也确实都得以解决了，这里将问题和解决办法列出：
+
+### 1. 未做伪装的 ip 被封杀 
+这是第一次尝试使用 vps 搭建 v2ray 服务，事实上非常的顺利，我确实完成了 v2ray 的搭建，但是第三天便遭到了中国政府的防火墙一记 ban ip 操作。现在想着这是极为危险的，但事情还得继续，问题自然是发生在我未对 v2ray 进行伪装，因为初次接触，所以对很多新的名词有恐惧心理，一开始便没有去尝试伪装操作，最终酿下错误，但是错误的本身其实也在推动着我技术的进步。
+
+问题的解决方法是，首先通过 WebSocket+TLS+Web 完成对传输层流量伪装，原理就是通过 Nginx 搭建了一个真实的网站，分流一个特定的路由去转发 v2ray 的流量，其实正常的伪装到这里就结束了。但前面我说了，我的 VPS ip 被封杀了，其导致了我没办法在国内正常通过 ssh 访问到服务器，所以根据攻略我又加了一层伪装，我将我的域名名服务器交给 cloudflare 让其帮我把域名伪装成其他的ip，从而躲过封杀。
+
+这样的后果也很明显，虽然更加安全了，但是代理速度确实也下来了。。。于是，我还是决定摧毁当前的 vps ，重新构建一个，Vulter 会重新分配一个 新的ip。
+
+### 2. ChatGPT 封杀所有 vultr 的 ip
+如小标题所言，openai 确实封杀了所有来自 vultr 的 ip，但是这个问题不大，我还是通过 cloundflare 单独对这个域名伪装了 ip 得以成功使用chatgpt，这个在后文中会详细讲到。
+
+## 配置 vps 和 v2ray
+
+### 修改 hostname
+
+这个对v2ray 没啥子用，只是我想改而已：）
+
+```
+vim /etc/hostname
+
+```
+
+### 安装 git
+
+```
+apt-get install git
+```
+
+### 安装 zsh 和 ohmyzsh
+Linux 自带的 bash 不是那么地方便使用，所以换成 zsh 是个更好的选择。
+```
+apt-get install zsh
+sh -c ""$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)""
+```
+
+### 安装 v2ray
+
+#### 通过官方脚本自动安装 v2ray 本体
+确实有很多种方式安装 v2ray，我这里选择使用 `fhs-install-v2ray` 项目提供的安装脚本进行安装：
+主要是它能帮我自动创建一些文件：
+```
+installed: /usr/local/bin/v2ray
+installed: /usr/local/bin/v2ctl
+installed: /usr/local/share/v2ray/geoip.dat
+installed: /usr/local/share/v2ray/geosite.dat
+installed: /usr/local/etc/v2ray/config.json
+installed: /var/log/v2ray/
+installed: /var/log/v2ray/access.log
+installed: /var/log/v2ray/error.log
+installed: /etc/systemd/system/v2ray.service
+installed: /etc/systemd/system/v2ray@.service
+```
+
+执行下面的程序脚本即可（目前时间是：2023-05-22，该脚本未来可能发生变动，以具体情况为准）
+此处贴出项目 README 文件：[README.zh]('https://github.com/v2fly/fhs-install-v2ray/blob/master/README.zh-Hans-CN.md')
+
+```
+bash <(curl -L https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
+```
+
+执行完后，若无明显错误，即可通过 `systemctl start v2ray.service` 和 `systemctl status v2ray.service` 查看是否能正确启动。
+
+#### 配置 v2ray 服务端 
+无论是服务端亦或是客户端的配置，其实都非常简单，只需要将配置文件改动一些即可使用。
+以下是官方提供的服务端配置：
+```json
+{
+    ""inbounds"": [
+        {
+            ""port"": 10086, // 服务器监听端口
+            ""protocol"": ""vmess"",
+            ""settings"": {
+                ""clients"": [
+                    {
+                        ""id"": ""xxxxxxxxxxxxxxx""
+                    }
+                ]
+            }
+        }
+    ],
+    ""outbounds"": [
+        {
+            ""protocol"": ""freedom""
+        }
+    ]
+}
+```
+在入门阶段，只需要了解 `inbounds` 中的 `port` 和 `id` 即可。
+- `port` 即是服务器的监听端口
+- `id` 可以理解为某种密钥一样的存在，在服务端与客户端交流时，需要通过这值进行辨别身份。可以使用 `cat /proc/sys/kernel/random/uuid` 指令生成这个 id。
+
+> 服务器的配置中需要确保 id 和端口与客户端一致，就可以正常连接了。
+
+最后重启一下 v2ray 服务即可：`systemctl restart v2ray.service` ，当然因为可能存在的将配置文件写错的问题，最好再查看一下有没有错误产生 `systemctl status v2ray.service`
+
+没有问题后，即可开始配置 v2ray 客户端。
+
+啊，最后注意让防火墙放开对应的端口，比如这里的10086端口
+```
+ufw allow 10086/tcp
+```
+### 配置 v2ray 客户端
+- Linux 平台可以使用 v2ray 程序(服务器所用的那个)，它即可以当服务端也可以作为客户端使用
+- Android 平台可以使用 v2rayNG 
+
+无论是 android 还是 windows，其都有相应的图形界面，配置起来很简单，这里主要讲一下 v2ray 如何作为客户端使用。
+
+以下贴出官方提供的客户端配置：
+
+```json
+{
+    ""inbounds"": [
+        {
+            ""port"": 1080, // SOCKS 代理端口，在浏览器中需配置代理并指向这个端口
+            ""listen"": ""127.0.0.1"",
+            ""protocol"": ""socks"",
+            ""settings"": {
+                ""udp"": true
+            }
+        }
+    ],
+    ""outbounds"": [
+        {
+            ""protocol"": ""vmess"",
+            ""settings"": {
+                ""vnext"": [
+                    {
+                        ""address"": ""server"", // 服务器地址，请修改为你自己的服务器 ip 或域名
+                        ""port"": 10086, // 服务器端口
+                        ""users"": [
+                            {
+                                ""id"": ""b831381d-6324-4d53-ad4f-8cda48b30811""
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            ""protocol"": ""freedom"",
+            ""tag"": ""direct""
+        }
+    ],
+    ""routing"": {
+        ""domainStrategy"": ""IPOnDemand"",
+        ""rules"": [
+            {
+                ""type"": ""field"",
+                ""ip"": [
+                    ""geoip:private""
+                ],
+                ""outboundTag"": ""direct""
+            }
+        ]
+    }
+}
+```
+虽然这看起来蛮多的，但需要修改的地方也就是 `outbounds` 里的 `address`、`port` 和 `id`
+- `address` 填入 vps 的 ip 地址亦或是域名
+- `port` 填入服务端中监听的那个地址
+- `id` 填入服务端的 id
+
+这样一切弄完后，在配置一下 `socks_proxy` 的环境变量即可。
+```
+export socks_proxy=https://127.0.0.1:1080;""
+```
+当然也可以把 `http_proxy` 和 `https_proxy` 代理填入。
+
+若是你想在浏览器使用：
+- firefox 相对方便，直接在设置中选择 socks5 代理，地址即填入配置文件中的：`127.0.0.1:1080`
+- chrome 可以去下载 名为 `SwitchyOmega` 的插件，也使用 sock5 配置即可
+
+### 使用 WebSocket+TLS+Web 完成伪装
+此处先给出参考的文章引用，在文章末尾也会重复给出，感谢各位前辈的教程。
+- [V2Fly]('https://www.v2fly.org/guide/install.html')
+- [V2Ray+WebSocket+TLS+Web+Cloudflare教程]('https://whuwangyong.vercel.app/2023-03-18-v2ray-websocket-tls-web-cloudflare-guide/')
+- [linuxfunk]('https://linuxfunk.com/2017/10/31/v2ray-ws-tls-nginx%E5%AE%9E%E7%8E%B0%E5%8A%A0%E5%AF%86%E4%BC%A0%E8%BE%93/')
+- [V2Ray进阶指南：WSS组合配置(WebSocket + TLS + Nginx + CDN)]('https://cyfeng.science/2020/03/22/advanced-v2ray-with-wss/')
+
+在完成了之前那些操作后，自然是可以正常使用 v2ray 的，但是非常容易被封杀(我的坚持了两天hhhhh)，这也是我后来才得知道的 :(
+
+总之，被封杀了我便意识到了伪装是极其重要的，以下先介绍一些概念名称，我刚开始接触这一部分便直接放弃了，但遗憾的是这一部分却又不得不学，GFW 太强啦，我们只能被迫去与之对抗。
+
+#### TLS
+`TLS 加密`，TLS 中文叫 传输层安全性协议，以下是 wikipedia 的描述：
+> 将通信两方交换的资料做加密，保证两个应用间通信的保密性和可靠性，使客户与服务器应用之间的通信不被攻击者窃听
+
+这是用来加密的，广为人知的 `HTTP` 在经过 TLS 加密后，成为了`HTTPS`
+
+若是 v2ray 的流量没有被 TLS 加密，那么审查者便能根据数据内容分析出，这是违“法”的数据，而且代理流量源源不断地从固定 ip 发来，这样的流量同样是不正常的。
+
+#### 网站前置伪装 与 websocket 协议
+仅用 TLS 加密依旧是不够的，因为流量不正常，这些大规模的流量因为代理的原因来去于同一个ip，这样的流量即使是加密的，也应该是有问题的。所以，需要再完成一次伪装，使用 Nginx 与 域名 搭建一个真实的网站，我们的客户端通过 websocket（ws）协议与这个用 Nginx 作为前端的网站进行数据交流，这样一来，我们的服务器就是正儿八经的网站服务器（事实也确实如此），而非代理服务器，在找到某种特征之前，不可能大面积封杀这样的正常服务器。
+
+使用，我们现在的任务很简单，购买一个域名（可以是免费的二级域名），在我们的 VPS 中通过 Nginx 搭建一个真实但简单的网站，然后让客户端和服务器端通过ws协议交流，接着通过 Nginx 分流特定的路由。",published,2023-05-22 04:34:43.000000 +00:00,76
+49,你好，OrangePi Zero3！,2023/08/17/1148,"","本篇文章将详细地写下我配置这块单板计算机的全过程，之后若是有新的自托管服务也会在本文记录下来。
+
+## 购买
+
+自从接触 Linux 之后渴望得到一个树莓派了，奈何因为疫情导致了全球的芯片供应紧张，树莓派的价格水涨船高，价格已经远远超过了它的价值，更重要的是超过了我的预算，即使是二手的价格也非常不值当。总之，出于囊中羞涩的考虑，我最终选择了这块国产的派 —— **OrangePi Zero3.**
+
+![2023-08-17_12-27.png](https://s2.loli.net/2023/08/27/uq5Lpt4VhGs3eTZ.png)
+
+我购买的是内存为 1.5G 的版本价格为一百出头，刚拿到快递的时候我就疑惑了， 为何如此之小！开箱后更是震惊，它甚至没有我的巴掌大呢！虽然但是，这还是很精致的，而且对于这样的设备而言，小其实是更好的，更方便搭载在其他的设备上。
+
+![photo_6264513425795298480_y.jpg](https://s2.loli.net/2023/08/27/ZeyCJqUun7NYE2I.jpg)
+
+
+
+
+
+除开这块板子，我还另外买了：
+
+- 亚克力的外壳
+- 风扇+散热片
+- USB to TTL 用于串口调试
+- 64G 闪迪 tf 卡
+
+
+
+关于系统镜像方面，我还是选择了熟悉的 debian 发行版，毕竟我的 vps 用的也是这个，这块单板计算机我是拿来内网穿透的 [官方镜像](http://www.orangepi.cn/html/hardWare/computerAndMicrocontrollers/service-and-support/Orange-Pi-Zero-3.html)
+
+
+![2023-08-17_12-42.png](https://s2.loli.net/2023/08/27/2gtelYJwAKvsV8X.png)
+
+
+## 系统配置
+在向 tf 卡刷完系统后，就可以通过串口进行连接了。
+
+
+
+### 自动连接热点 WiFi
+
+使用串口多少是不方便的，所以先来配置一下网络，让其他机器可以通过 ssh 访问这块板子。
+
+1. 使用`nmcli dev wifi`查看当前扫描到的 wifi 列表。
+
+2. 使用 `nmcli` 连接到热点并输入密码：
+
+```bash
+sudo nmcli dev wifi connect YourHotspotName password YourPassword
+```
+
+3. 将连接的配置设置为自动连接：
+
+```bash
+sudo nmcli connection modify ""YourHotspotName"" connection.autoconnect yes
+```
+
+将 `YourHotspotName` 替换为你的热点名称，`YourPassword` 替换为密码。
+
+完成后通过 `ip addr ` 即可看到 ip 地址，然后就可以通过 ssh 正常访问板子了
+
+
+
+### 添加一个新用户
+
+```
+useradd -m -G additional_groups -s login_shell username
+```
+
+```bash
+passwd username
+```
+
+然后去修改` /etc/sudoers` 文件
+
+
+
+## FRP 内网穿透
+
+在这个 [releases](https://github.com/fatedier/frp/releases) 页面中，找到对应架构的压缩包，可以使用 `uname -a ` 查看到。
+
+- 我的 VPS 是 X86_64 那么就选择 [amd64.tar.gz](https://github.com/fatedier/frp/releases/download/v0.51.3/frp_0.51.3_linux_amd64.tar.gz) 的包
+- 香橙派是 arm 架构，那么就选择 [arm64.tar.gz ](https://github.com/fatedier/frp/releases/download/v0.51.3/frp_0.51.3_linux_arm64.tar.gz)的包
+
+通过 `wget` 下载
+
+```bash
+wget https://github.com/fatedier/frp/releases/download/v0.51.3/frp_0.51.3_linux_arm64.tar.gz
+```
+
+通过 `tar` 解压
+
+```bash
+tar xvf frp_0.51.3_linux_arm64.tar.gz
+```
+
+- **frpc**: 这是 FRP 客户端的可执行文件。FRP 客户端用于连接到 FRP 服务器并将内部网络服务暴露给外部访问。
+- **frps**: 这是 FRP 服务器的可执行文件。FRP 服务器用于接收来自客户端的连接，并将这些连接转发到内部的网络服务。
+- **frpc.ini**: 这是 FRP 客户端的配置文件，用于指定客户端的连接设置、代理规则等。
+- **frps.ini**: 这是 FRP 服务器的配置文件，用于指定服务器的监听端口、代理规则等。
+- **frpc_full.ini**: 这是 FRP 客户端的完整配置文件，可能包含更多详细的设置。
+- **frps_full.ini**: 这是 FRP 服务器的完整配置文件，可能包含更多详细的设置。
+
+
+
+### 服务器配置
+
+下载完对应架构的文件后，即可开始配置，只需要关心 `frps` 和 `frps.ini` 文件即可，前者是FRP 服务器的可执行文件，后者是这是 FRP 服务器的配置文件。
+
+打开 `frps.ini`进行配置，配置文件的内容如下：
+
+```ini
+[common]
+bind_port = 7000
+token = 1234567890
+```
+
+客户端和服务器的配置文件中都需要设置相同的 Token 才能正确进行连接和通信。
+
+为了保障安全性，你应该选择一个强密码的 Token，并确保不会轻易泄露给他人。如果你怀疑 Token 可能已经暴露，应当立即生成一个新的 Token 并更新配置文件。
+
+完成后，运行 `./frpc -c ./frpc.ini` 
+
+若无问题，则说明配置成功。
+
+接下来，配置一下 systemd 服务，让上面这条运行命令能开机自动启动，这非常实用：
+
+但是在此之前，我们需要先将 `frps` 和 `frps.ini` 文件放到合适的地方：
+
+```
+sudo cp frps /usr/local/bin/
+sudo mkdir /usr/local/etc/frp
+sudo cp frps.ini /usr/local/etc/frp/
+```
+
+
+
+首先，创建一个名为`frps.service`的文件，该文件将存储有关你的自启动服务的信息。通常，这些文件存放在`/etc/systemd/system/`目录下。
+
+```bash
+sudo vim /etc/systemd/system/frps.service
+```
+
+```
+[Unit]
+Description=frps
+After=network.target
+[Service]
+TimeoutStartSec=30
+WorkingDirectory=/usr/local/bin/
+ExecStart=/usr/local/bin/frps -c /usr/local/etc/frp/frps.ini
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+```
+
+
+
+保存后，执行：
+
+```
+sudo systemctl enable frps
+sudo systemctl start frps
+sudo systemctl status frps
+```
+
+若无问题，则可进入客户端的配置。
+
+下面是一些常用的命令：
+
+- 启动服务：`sudo systemctl start frps`
+- 停止服务：`sudo systemctl stop frps`
+- 重启服务：`sudo systemctl restart frps`
+- 查看服务状态：`sudo systemctl status frps`
+- 关闭自启动：`sudo systemctl disable frps`
+
+### 客户端配置
+
+下载完对应架构的文件后，即可开始配置，只需要关心 `frpc` 和 `frpc.ini` 文件即可，前者是FRP 客户端的可执行文件，后者是这是 FRP 客户端的配置文件。
+
+**假设：**
+
+**服务器的ip地址是 1.1.1.1, 服务端frp正在监听的端口是7000, token是1234567890**
+
+**客户端目前正在运行一个项目叫 bitwarden ,它正在本地 0.0.0.0 地址上监听 1111 端口**
+
+
+
+打开 `frpc.ini`进行配置，配置文件的内容如下：
+
+```
+[common]
+server_addr = 1.1.1.1
+server_port = 7000
+token = 1234567890
+
+[bitwarden]                 
+type = tcp                 
+local_ip = 0.0.0.0     
+local_port = 1111         
+remote_port = 8111
+```
+
+
+
+值得注意的是，配置文件中的 [bitwarden] 可以替换成任何想要的名字
+
+为了方便，我们同样设置 systemd 服务
+
+但是在此之前，我们需要先将 `frpc` 和 `frpc.ini` 文件放到合适的地方：
+
+```
+sudo cp frpc /usr/local/bin/
+sudo mkdir /usr/local/etc/frp
+sudo cp frpc.ini /usr/local/etc/frp/
+```
+
+
+
+首先，创建一个名为`frpc.service`的文件，该文件将存储有关你的自启动服务的信息。通常，这些文件存放在`/etc/systemd/system/`目录下。
+
+```bash
+sudo vim /etc/systemd/system/frpc.service
+```
+
+```
+[Unit]
+Description=frpc
+After=network.target
+[Service]
+TimeoutStartSec=30
+WorkingDirectory=/usr/local/bin/
+ExecStart=/usr/local/bin/frpc -c /usr/local/etc/frp/frpc.ini
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+```
+
+
+
+保存后，执行：
+
+```
+sudo systemctl enable frpc
+sudo systemctl start frpc
+sudo systemctl status frpc
+```
+
+若无问题的话，则说明没有问题！
+
+
+
+### 原理
+
+Frp（Fast Reverse Proxy）是一个用于内网穿透的工具，它允许你在公网上访问位于内网的计算机服务。它的原理是通过在公网服务器上部署 frps（Frp 服务器端）和在内网机器上部署 frpc（Frp 客户端），通过公网服务器作为中转，将外部请求转发到内网机器上。
+
+- 在公网服务器上部署 frps：公网服务器上运行的 frps 监听一个指定的端口，等待来自 frpc 的连接。
+- 在内网机器上部署 frpc：内网机器上的 frpc 将建立到 frps 的连接，并注册自己的服务信息。frpc 和 frps 之间建立的连接可以被用于穿透数据。
+- 数据传输：当公网客户端请求连接到公网服务器的指定端口时，frps 会将这个请求转发给已经连接的 frpc 客户端，然后 frpc 客户端再将请求转发到内网机器的指定服务上。
+
+
+
+在我上面的配置中，其转换的意思就是：
+
+frps 监听在公网服务器的 7000 端口，frpc 连接到公网服务器的 7000 端口，并注册自己的服务信息。frpc 客户端配置了一个类型为 TCP 的服务，将本地的 bitwarden 服务映射到公网服务器的 8111 端口上。
+
+若是请求 https://1.1.1.1:8111 那么这个请求就转发给客户端的 http://0.0.0.0:1111
+
+
+
+### Nginx 配置
+
+我在服务器中是使用 Nginx 来进行反向代理的，若你的服务器不是，则可以跳过此内容。**若你完全不了解 nginx 建议先去学习了之后再回来进行配置，因为此处我写得很简略，可能会对你产生误导。**
+
+我的 Nginx 代理了80端口，所有的请求都是从此处进入上文提到，需要从 8111 端口进入才能访问内网，所以我需要对 nginx 添加一些配置：
+
+![2023-08-17_15-48.png](https://s2.loli.net/2023/08/27/RrNxIVbkSTgGQOy.png)
+
+这样，当请求 bitwarden 路径时，将会反向代理到 8111 端口
+
+当然，通过 nginx 也可以配置子域名来访问，首先将三级域名 bitwarden.yarnom.top 通过 CNAME 指向当前的服务器地址
+
+然后，nginx 设置一个新的 server ，server_name 就是这个三级域名：
+
+![2023-08-17_15-26.png](https://s2.loli.net/2023/08/27/DjX7LebSQftPovT.png)
+
+
+## 搭建 **[Vaultwarden](https://github.com/dani-garcia/vaultwarden)**
+
+由于官方的 Bitwarden 服务对于我的小机子来说过于庞大了，所以选择了社区用 Rust 编写 Vaultwarden 项目
+
+它可以用 docker 搭建，那就是几条命令就能安装完毕：
+
+```
+Pull the docker image and mount a volume from the host for persistent storage:
+
+docker pull vaultwarden/server:latest
+docker run -d --name vaultwarden -v /vw-data/:/data/ --restart unless-stopped -p 80:80 vaultwarden/server:latest
+```
+
+完成！
+
+
+
+### 搭建 [Memos](https://github.com/usememos/memos)
+
+docker 搭建
+
+```
+docker run -d --name memos -p 5230:5230 -v ~/.memos/:/var/opt/memos ghcr.io/usememos/memos:latest
+```
+
+自行修改参数即可。
+
+完成！",published,2023-08-17 03:48:44.000000 +00:00,69
+72,梧州旧英国领事馆往事,2025-10-09-0659,"","今年十一国庆八天长假，国内外景点人潮汹涌，我索性回梧州，与朋友逛逛街、聚聚餐，在家休息恢复元气。
+
+梧州城内保留着浓厚的民国气息，作为近代通商口岸，这里曾是东西文化交汇之地。并随着天主教、基督教的传播，城区陆续建立起小型教堂与传教站，至今在河东仍可见部分完好的建筑。
+
+![photo_5989917955900690593_w.jpg](https://s2.loli.net/2025/10/09/9brRyIQdVq7Lcmg.jpg)
+
+英国领事馆于1897年开设，作为管理西江贸易的据点。其位于浔江和西江交汇处的白鹤山（珠山）丘顶。这片土地被划为英国领土，竖立界碑和“游人不准登山”牌子。
+
+从网上找到的一些胶片照片
+![Unknown Photographer, _British Consulate, Wuzhou _Woochow__, hand-coloured, c.1890.jpg](https://s2.loli.net/2025/10/09/1cyBOkt4sYJp7dl.jpg)
+
+![na30-115.jpg](https://s2.loli.net/2025/10/09/aFTfchrQnCu1tGZ.jpg)
+
+可惜的是我忘记拍摄英国领事馆的正面的，主要也是当时人有些多，如今相机里只有侧面的照片，可惜可惜。
+
+![P1000556-1.jpg](https://s2.loli.net/2025/10/10/zKqYj8SMeFpEfyc.jpg)
+
+辛亥革命后，民族主义与反帝思潮兴起。1919年爆发“白鹤山事件”，英领馆与中国驻军冲突，英军舰示威，最终中方被迫道歉赔款。1926年“五卅运动”周年纪念日，民众包围领事馆，本地雇员辞职，英国领事仓皇逃港。1928年，广西省主席黄绍弘与英国驻穗领事谈判，以25,000港元赎回土地，并竖立“还我河山”碑。
+
+世界上许多国家都有独立日，它们背后都与殖民史相关。殖民帝国的扩张带来掠夺与压迫，也在血与火中孕育了民族意识与现代文明的种子。
+
+
+英国领事馆前的雕塑：
+![photo_5989917955900690594_w.jpg](https://s2.loli.net/2025/10/09/hADSuMVN6aigewm.jpg)
+
+登上白鹤楼，可俯瞰河东
+![photo_5989917955900690592_w.jpg](https://s2.loli.net/2025/10/09/ekKScZ4pmUJoyzj.jpg)
+两江汇流处，可以看到明显的河水清浊对撞，一清一浊、泾渭分明，本地人称为 “鸳鸯江” ， 图中的这座桥便是鸳鸯桥，不过小时候因为这种桥的颜色，我其实一直称它为 “彩虹桥”
+![P1000543.jpg](https://s2.loli.net/2025/10/10/JRSi6FK3LUPB5r1.jpg)
+",published,2025-10-09 06:59:00.000000 +00:00,80
+59,地理坐标转换,2024/06/29/0707,"","近些日子的工作频繁接触到了大地测量中的各种知识，在编写程序的时候更是涉及各种地理坐标的转换，虽然没有深入去学习其核心的变化原理，但是简单地使用现存的公式配合程序进行计算还是可以做到的，以下是有关知识的记录。
+
+
+
+### 1.名词解释
+
+#### 1.1 LLA 坐标系 
+
+LLA 坐标是地理坐标系中的一种表示方法，LLA 代表经纬度和高度（Latitude, Longitude, and Altitude），它通常用于描述地球表面上的位置。
+
+- **Latitude (纬度)**：表示从地球赤道向北或向南的角度，范围是 -90° 到 +90°。正值表示北纬，负值表示南纬。
+- **Longitude (经度)**：表示从本初子午线（通常是通过格林尼治的子午线）向东或向西的角度，范围是 -180° 到 +180°。正值表示东经，负值表示西经。
+- **Altitude (高度)**：表示相对于平均海平面的高度，可以是正值（高于海平面）或负值（低于海平面）。
+
+LLA 坐标系也叫全球地理坐标系、大地坐标系、WGS-84坐标系。纬度和经度的数值可以以多种不同的单位或格式出现：
+
+- 六十进制度：度、分、秒：40° 26′ 46“ N 79° 58′ 56” W
+- 度和十进制分：40° 26.767′ N 79° 58.933′ W
+- 十进制度： +40.446 -79.982
+
+横纬竖经，在计算的过程中，主要也是将之转换为十进制来计算的，以下是计算公式：
+$$
+decimal = degress + \\frac{minutes}{60} + \\frac{seconds}{3600}
+$$
+
+
+关于 **WGS-84** （ World Geodetic System 1984，1984年世界大地测量系统），它是目前全球范围内使用最广泛的地理坐标系统和地球模型，由美国国防部制定和维护，主要用于全球定位系统（GPS）和各种地理信息系统（GIS）。
+
+WGS-84 有几个关键常量用于定义参考椭球体的形状和尺寸，这些常量包括半长轴、半短轴、扁率和离心率等：
+
+- **半长轴 (A)**：椭球体的赤道半径
+  - 其值为 $ 6378137.0 $ 米。
+- **半短轴 (B)**：椭球体的极半径
+  - 其计算公式为： $ B =  A*(1-F)  $
+  - 其值为 $ 6356752.3142 $ 米
+- **扁率 (F)**：描述椭球体扁平程度的参数
+  - 其计算公式为：$ F = \\frac{A-B}{A}$
+  - 其值为：1/298.257223563
+- **第一离心率 (E)**：描述椭球体形状的一种参数，反映了椭球体的偏离程度
+  - 其计算公式：$ E = \\sqrt{1 - (\\frac{B}{A}) ^2} $
+  - 其值约为： 0.0818191908426
+- **第一离心率的平方 (E²)**：减少计算所用
+  - 其中值约为： 0.00669437999014
+
+
+
+#### 1.2 ECEF坐标系
+
+ECEF（Earth-Centered, Earth-Fixed）坐标系是一种三维笛卡尔坐标系，用于表示地球上的位置。ECEF 坐标系也称为地心地固坐标系，它的原点位于地球质心，并且随着地球的自转而旋转。
+
+- **X 轴**：指向穿过地球赤道与本初子午线（通过格林尼治的子午线）交点的方向。
+- **Y 轴**：指向穿过地球赤道与东经90度子午线交点的方向。
+- **Z 轴**：指向北极方向，与地球自转轴一致。
+
+ECEF 坐标系提供了一个统一的三维坐标框架，可以精确地表示地球表面和近地空间的任何位置。
+
+
+
+#### 1.3 ENU坐标系
+
+ENU（East-North-Up）坐标系是一种局部笛卡尔坐标系，用于表示相对于某个参考点的三维位置。
+
+- ENU 坐标系的原点通常位于地球表面的某个参考点，该点的地理坐标为 (Latitude, Longitude, Altitude)。
+- **E 轴（东向轴）**：指向地平线的东方。
+- **N 轴（北向轴）**：指向地平线的北方。
+- **U 轴（上向轴）**：垂直向上，指向天空。
+
+
+
+### 2. 坐标系转换
+
+#### 2.1 从 LLA 坐标到 ECEF 坐标
+
+这里约定LLA的经度为 $\\phi$，纬度为 $\\lambda $，海拔为 $ h $,  选取 WGS-84 坐标系参数，$a$和$b$分别是是赤道半径（半长轴）和极半径（半短轴），$e^2 = 1 - \\frac{b^2}{a^2}$是偏心率的平方, $f=1-\\frac{b}{a} $ 是基准椭球体的极扁率。
+$$
+\\begin{align}
+X& = (N(\\phi) + h) cos \\phi cos\\lambda \\\\\\\\
+Y& = (N(\\phi) + h) cos \\phi sin\\lambda \\\\\\\\
+Z& = (\\frac{b^2}{a^2}N(\\phi) + h)sin\\phi \\\\\\\\
+&=((1-e^2)N(\\phi) +h)sin\\phi \\\\\\\\
+&=((1-f)^2N(\\phi)+h)sin\\phi
+\\end{align}
+$$
+其中
+$$
+\\begin{align}
+N(\\phi) = \\frac{a^2}{\\sqrt{a^2cos^2\\phi + b^2sin^2\\phi}} = \\frac{a}{\\sqrt{1-e^2sin^2\\phi}}
+\\end{align}
+$$
+
+
+
+
+
+#### 2.2 从 ECEF 到 LLA坐标
+
+将 ECEF 坐标 (X, Y, Z) 转换为经纬度和高度 (Latitude, Longitude, Altitude) 需要迭代计算。
+$$
+\\begin{align}
+\\lambda = atan2(Y,X)
+\\end{align}
+$$
+
+
+其中，atan2 是反正切函数
+
+$\\lambda$ 是唯一能直接算出的，其余的纬度和高度的转换所要涉及 N 的循环关系
+$$
+\\begin{align}
+\\frac{Z}{p}cot\\phi = 1 - \\frac{e^2N}{N+h} \\\\\\\\
+h = \\frac{p}{cos\\phi} -N
+\\end{align}
+$$
+其中，如公式$(6)$所示，N 的变化取决于 $\\phi$  的值
+
+纬度和高度需要迭代求解， 例如，从第一个猜测 h≈0 开始，然后更新 N。
+
+其流程是这样的：
+
+1. 猜测 h = 0，通过公式$(8) $ 可以推算 $cot\\phi = \\frac{(1-e^2)p}{Z} $ 求解出一个$\\phi_1$
+2. 将 $\\phi_1$ 带入公式 $(6)$，求解出 $N$
+3. 将 $N$ 带入公式$(9)$ 求解出 $h$
+4. 将 $h$ 带入公式$(8)$ 求解出一个新的 $\\phi_2$
+5. 如果 $\\phi_1$和$\\phi_2$足够接近，则说明迭代出了一个正确的值，如果不是，则需要回到第2步继续迭代。
+
+
+
+#### 2.3 从 ECEF 到 ENU 坐标
+
+ENU 坐标又称为站心坐标，6也就是局部坐标，这个坐标需要一个局部参考点。在实际例子中，这个参考点通常是雷达、基站这些地方。
+
+如果基站位于 ${X_0,Y_0,Z_0}$，测站位于 ${X_1,Y_1,Z_1}$
+
+$$
+\\begin{bmatrix}
+  e\\\\\\\\
+  n\\\\\\\\
+  u
+\\end{bmatrix}=
+\\begin{bmatrix}
+  -sin\\lambda_0& cos\\lambda_0 & 0\\\\\\\\
+  -sin\\phi_0cos\\lambda_0& -sin\\phi_0sin\\lambda_0 &cos\\phi_0 \\\\\\\\
+  cos\\phi_0cos\\lambda_0& cos\\phi_0sin\\lambda_0 & sin\\phi_0
+\\end{bmatrix}
+\\begin{bmatrix}
+  X_1 -X_0\\\\\\\\
+  Y_1-Y_0\\\\\\\\
+  Z_1-Z_0
+\\end{bmatrix}
+$$
+
+
+
+(完)",published,2024-06-28 23:07:00.000000 +00:00,67
+60,RTCM 1005 解析,2024/07/19/1302,"","### 前言
+
+RTCM 是一种普遍采用的数据传输格式，它是由国际海运事业无线电技术委员会提出的，用于制定在差分全球导航定位系统和实时动态操作时使用的标准。
+
+下面是技术规范文档：
+
+- [RTCM3.3 c10403.3_all.PDF](https://rtcm.myshopify.com/products/rtcm-10403-3-differential-gnss-global-navigation-satellite-systems-services-version-3-amendment-2-may-20-2021) 
+- [北云科技技术文档](http://www.bynav.cn/media/upload/cms_15/AN018_RTCM3.2%E6%A0%BC%E5%BC%8F%E8%AF%B4%E6%98%8E_%E5%8C%97%E4%BA%91%E7%A7%91%E6%8A%80.pdf)
+
+第一个文档是官方的，包含了很多的细节，但是需要付费，虽说有其他方式获得，但版权原因还是不在此贴出；
+
+第二个文档是北云科技的，中文文档虽说少了一些细节，但终究方便阅读，虽然本文不会参考它 :)
+
+
+
+### 文档解读
+
+RTK的消息类型有很多，初看会很懵，但在只要找到自己想要了解的消息类型即可，在文档的 **3.2 节 Message Type Summary** 中有详细的介绍，本文主要关注 1005 这个消息类型，它由 19 个字节也就是 152 个比特构成，它主要包含基准站位置数据信息，也就是基站的 ECEF 的坐标。
+
+![Screenshot from 2024-08-05 09-41-51.png](https://s2.loli.net/2024/08/05/RaPYsoigDQx9bdJ.png)
+
+
+
+在正式阅读之前，还需要了解一下数据结构和类型，在文档的 **3.3节 Data Types** 有详细的介绍：
+
+数据类型很好理解，它规定了数据的范围和构成，后面写程序做转换的时候要严格按照本节的数据结构来实现。
+
+
+
+![image.png](https://s2.loli.net/2024/08/05/NnBhPOSTv6WiQXE.png)
+
+
+
+下面是这个协议具体的内容， 后面会详细分析：
+
+![image.png](https://s2.loli.net/2024/08/05/wpTWIeMRGxCgiKB.png)
+
+---
+
+
+
+### 解算
+
+下面给出一段 RTCM 1005 的原始码流，它是十六进制的 ASCII ：
+
+````
+D3 00 13 3E D7 D3 02 02 98 0E DE EF 34 B4 BD 62 AC 09 41 98 6F 33 36 0B 98
+````
+
+在手动计算之前，还需要了解一下它在传输时候的格式，RTCM 数据以帧的形式的传输
+
+![image.png](https://s2.loli.net/2024/08/05/qzBoWSIQyPXiNL6.png)
+
+- Preamble ： 同步码（8 bits） ， 11010011 ，其十六进制为 'D3'
+- Reserved ：  保留（6 bits），000000，十六进制为 00
+- Message Length： 长度（10 bits），数据信息的长度，以字节数表示
+- Variable Length Data Message（0-1023 bytes）： 可变长数据消息，长度不定，最大 1023 bytes 
+- CRC：校验（24 bits）
+
+所以 RCTM 1005 每帧大致长这样： **1101 0011 0000 00 + 长度 + 数据 +  校验**
+
+开头固定为 ：  **1101 0011 0000 00** ，十六进制就是 **D30** ，我们再回头看一下原始码流：
+
+````
+D3 00 13 3E D7 D3 02 02 98 0E DE EF 34 B4 BD 62 AC 09 41 98 6F 33 36 0B 98
+````
+
+前三个十六进制 ASCII 码 我们就能解析出来了，后面紧跟着的是消息长度，它使用 10 个 bit 存储
+
+````D3 00 13 
+Hex： D3 00 13
+Binary： 1101 0011 0000 0000 0001 0011
+````
+
+所以，同步码 + 保留 + 长度 总共就用了 24 个 bit ，也就是 3 个字节
+
+接下来就是可变长度的数据消息了，下面的表格就是 1005 类型的数据内容：
+
+````
+DATA FIELD                                  DF NUMBER   DATA TYPE   NO. OF BITS
+-------------------------------------------------------------------------------
+Message Number (""1005""=0011 1110 1101)      DF002       uint12      12
+Reference Station ID                        DF003       uint12      12
+Reserved for ITRF Realization Year          DF021       uint6       6
+GPS Indicator                               DF022       bit(1)      1
+GLONASS Indicator                           DF023       bit(1)      1
+Reserved for Galileo Indicator              DF024       bit(1)      1
+Reference-Station Indicator                 DF141       bit(1)      1
+Antenna Reference Point ECEF-X              DF025       int38       38
+Single Receiver Oscillator Indicator        DF142       bit(1)      1
+Reserved                                    DF001       bit(1)      1
+Antenna Reference Point ECEF-Y              DF026       int38       38
+Quarter Cycle Indicator                     DF364       bit(2)      2
+Antenna Reference Point ECEF-Z              DF027       int38       38
+-------------------------------------------------------------------------------
+TOTAL                                                               152
+````
+
+
+
+#### Message Number (""1005""=0011 1110 1101)
+
+它的长度 12 个比特，也就是 3 个 Hex Ascii 码：
+
+```
+Hex: 3E D
+Bin: 0011 1110 1101
+Dec: 1005
+```
+
+将十六进制的 3ED Ascii 码转换为 十进制的数字，我们可以看到它正好是 **1005**
+
+#### Reference Station ID
+
+```
+Hex: 7 D3
+Bin: 0111 1101 0011
+Dec: 2003
+```
+
+#### Reserved for ITRF Realization Year
+
+Hex：02 02
+Bin：**0000 00**1 00000 0010（取前 6 位 ，也就是 0000 00 = 0） 
+
+#### GPS Indicator 
+
+Hex: 02 02
+
+Bin：0000 00**1 **00000 0010 （取第 7 位 ，也就是 1）
+
+#### GLONASS Indicator  
+
+Hex: 02 02
+
+Bin：0000 001**0** 0000 0010 （取第 8 位 ，也就是 0）
+
+#### Reserved for Galileo Indicator 
+
+Hex: 02 02
+
+Bin：0000 0010 **0**000 0010 （取第 9 位 ，也就是 0）
+
+#### Reference-Station Indicator  
+
+Hex: 02 02
+
+Bin：0000 0010 0**0**00 0010 （取第 10 位 ，也就是 0）
+
+#### Antenna Reference Point ECEF-X
+
+它的长度是 38 bits
+
+Hex： 02 98 0E DE EF
+
+Bin:  00**00 0010 1001 1000 0000 1110 1101 1110 1110 1111**
+
+Dec: 11141045999
+
+#### Single Receiver Oscillator Indicator
+
+Hex: 34
+
+Bin: **0**011 0100 （取第 1 位， 也就是0）
+
+#### Reserved
+
+Hex: 34
+
+Bin:  0**0**11 0100 （取第 2 位， 也就是0）
+
+#### Antenna Reference Point ECEF-Y 
+
+它的长度是 38 bits
+
+Hex: 34 B4 BD 62 AC
+
+Bin: 00**11 0100 1011 0100 1011 1101 0110 0010 1010 1100**
+
+二进制最高位是 1 ，为负数，所以要取反再加1
+
+补码： 1**0 1011 0100 1011 0100 0010 1001 1101 0101 0100** 
+
+除去第一位的符号位，后面加粗的就是实际的数值
+
+Bin: 0 1011 0100 1011 0100 0010 1001 1101 0101 0100
+
+Hex: 4B 4B 42 9D 54
+
+Dec: 48507297108
+
+加上符号位就是 -48507297108
+
+#### Quarter Cycle Indicator 
+
+Hex: 09
+
+Bin: **00** 00 1001（取前两位， 也就是 00）
+
+#### Antenna Reference Point ECEF-Z 
+
+Hex : 09 41 98 6F 33
+
+Bin:  00**00 1001 0100 0001 1001 1000 0110 1111 0011 0011**
+
+Dec： 39755214643
+
+
+
+---
+
+到此为止，手动结算就已完成，若是关注 ECEF XYZ 的取值，则需要回看数据类型，它们的数据类型是 DF025、DF026、DF027
+
+![image.png](https://s2.loli.net/2024/08/05/QcpB6iJHEjxY8Ng.png)
+
+这张图详细地说明了 ECEF XYZ 的数据类型，数据范围，数据处理
+
+其中，它是 int38 的有符号38位整数，数据是 0.0001 m 
+
+上面我们算得的数，都应做一个处理：
+
+ECEF-X ： 11141045999 * 0.0001 = 1114104.5999m 
+
+ECEF-Y： 48507297108*0.0001= -4850729.7108m
+
+ECEF-Z：39755214643*0.0001 = 3975521.4643m
+
+
+
+（完）",published,2024-07-19 05:02:26.000000 +00:00,77
+61,广州的天气,2024/08/26/0854,"","六月份的时候在广州谋求了一份工作，公司不是很大，但氛围还挺好的，就是有些在学校实验室的感觉，幸得除我之外还有另一位实习同事，他是研究生毕业的，所学的是测绘，公司的主营业务也正是这一方向，而我则是以实习软件工程师的身份入职。
+
+入职的时候也正是暑假开始，以往的暑假我都在家里晃晃度日，从小学到大学毕业，十多年的时间，眨眼就要工作了，时间就像是加速了一样，我现在仍能回想起小学的时候和小区里的好朋友一起玩泥巴过家家的场景，如今则真的要像一个成年人那样去自己生活了，即感慨又缅怀。说起家，我的恋家情绪其实并不严重，因为大学是从广西到哈尔滨上学，离家远，所以平时的短假是不够时间回家的，四年里也习惯了这种离家的感觉，加之现在有视频聊天，怎么样都不会太过恋家的。
+
+入职的时候在广州这边的城中村租了一个小单间，房价 900 多一个月，但主要是水电好贵（水 5元/吨 · 电 1.5元/度）, 以后有钱要狠狠搬家，现在做饭都很困难，因为没有厨房，可惜我的寒暑假磨练的厨艺了，并且今日去外面吃了青椒炒肉，居然和我水平一样，离谱的是要 19 块，当真是不便宜呢。
+
+---
+
+前段时间广州受到了季风气候的影响，下了一个星期的雨，感觉房间和衣服都霉臭霉臭的，并且阴天笼罩着使得每个人感觉都很不开心，那段时间也是我工作极为不顺的日子，但索性也都撑过来了，但还是有些后怕的，当然并非是工作方面的，而是生活！比如我的内裤和袜子在那段时间里就几乎就没有干过，要不是我带来广州的内裤和袜子多，还真的连门都出不了，所有感觉买一个烘干机还是很有必要的，回南天我想它必能发挥无比大的用处。所以也在想要不要买些一次性袜子和内裤作为应急之物，省得下雨回南时湿漉漉的，发霉到了极致，长小蘑菇可就不雅了。
+
+说起应急之物，储备些药物似乎很有必要呢。
+### 药物
+#### 1. 外伤
+小型的擦伤创可贴+碘伏似乎就能搞定，更严重的伤口想必还是得去看医生，所以买一盒创可贴、棉签、碘伏
+
+#### 2. 退烧止疼药
+毕竟是从新冠时代过来的，发烧止疼用「对乙酰氨基酚」和「布洛芬」我想就足够了，另外加一只体温计。
+
+#### 3. 病毒性感冒
+这个似乎无药可治，还是以预防为主吧，前段时间还听说新冠又在广州蔓延，早上挤地铁时还看到有人戴 N95 口罩呢，事情的真假不得而知，总之戴口罩还是没有错的，避免病毒传播。所以，买些口罩在地铁的时候戴戴。
+
+感冒按照以往的经验，不发烧即意味着一个星期便好，只不过中间很难受，发烧则可以尝试一下退烧药，若是反复烧则去医院抽血检查一下，想必是病毒太猛了，抽血针对性杀掉它们。",published,2024-08-26 00:54:42.000000 +00:00,79
+62,移动固态硬盘安装 Arch Linux,2024/10/23/0940,"",最近双十一，我买了西部数码的 SN580 1T 固态硬盘作为我的外置 Arch Linux ，安装好后即可在公司的台式机和自己的笔记本中直接使用，这样编程环境可以得到比较好的统一。,published,2024-10-23 01:40:18.000000 +00:00,
+63,抽烟,2024/11/15/1823,"","前段时间我开始抽烟了——仔细想想回溯到上一次抽 “烟” 的时间，那还是小学的时候。
+
+那时候调皮呀，在家里就将各种纸卷成香烟的长条形状，火机点燃后就叼着这根 “香烟” 尾部吸将起来。
+
+说起小学，那时候的我不知为何，知识总是不如脑子，自己也笨笨的，每天写不出来作业被老师训斥在门口外面罚站……我妈妈也认为我读完初中可能就要出去打工了，因为我看起来根本不是读书的料。
+
+人生的转机发生在六年级的时候，我开始接触到一些黑客的电影，进而开始接触到编程，那时候只是觉得很酷罢了，但是学着学着就歪到了编程去了，从 windows 的 bat 脚本到前端的 html css ，我居然真的可以创造出一些东西来，上了初中后更是一发不可收拾，前端后端都开始接触，老实说现在回看以前的代码，那必然是幼稚和简单的，但是这种简单代码的实现确实从而改变了我后面的人生，我开始越学越多，越写越喜欢……学业上也开始好转，我学初中的东西学得很快，成绩渐渐好转，后面也考上了大学，即使是没那么好的大学，但比起辍学打工倒是好上不少。
+
+说回香烟，因为大部分空闲时间都在编程上，所以香烟这种东西对我来说没有什么机会接触到，年龄和性格的转变让我也不再对其感兴趣，后面更是由于香烟对人体的危害很大的原因，对香烟更是避之不及，所以我的前二十年是抽烟的经历仅仅只是小学时的玩火闹剧罢了。
+
+真正意义上的接触香烟，是我大学毕业后参加工作的那几个月。在公司写的代码与闲暇时不同，它充斥着赶工、压力、混乱和不完美。
+
+那段时间的开发压力也极大，我的生命与生活开始不再属于自己，晚上回家睡觉，第二天重复前一天的工作，苦闷无法言说……
+
+记得开始吸烟的那天晚上加班回家，乏累地躺下打开抖音，一天的自由时间无非也就这几个小时罢了，那天也有些神经质了，很多视频也感觉比平时更有趣，更戳笑点，刚开始上浅浅发生一些笑声，后面则是发声大笑，然而真是喜极而泣，也真是悲从心来，活了二十多年啊，第一次感受到这种在大笑间内心涌出的莫名空洞无助……
+
+那种无助的情感弥漫到全身，但是我做不了什么，抱着被子和枕头鼻涕眼泪擤了又来，擦了又掉。
+
+我当时很清楚知道自己的精神出现了问题，但只能任由自己边哭边笑，到了后面则是痛哭，放声地痛哭，好多年没哭过，也好多年没出现这么委屈的情绪了。
+
+哭过之后，我想到了香烟，这是除开药物外可能对我有帮助的东西了，我不清楚我自己怎么了，但应该是太累了，我的情绪崩溃了。我不在乎它是否对我有害，是否会让我上瘾，我太累太痛苦了，我人生的前二十年，我极力控制自己不要与它产生接触，但是当压力真的降临到自己身上时，当看到自己在出租屋里精神错乱般的大笑大哭时，理智已经不存在了，痛苦混乱占据了大脑，香烟便是廉价的麻醉剂。
+
+我下来去买了一包上大学时听室友说起过的香烟牌子，回到楼顶天台不熟练地点燃一根，当夜间的风将吐出的烟雾带走，我的情绪也才真正的平复下来。
+
+我想我应该更爱自己才是，我的生活也不应该如此束缚。",published,2024-11-15 10:23:00.000000 +00:00,
+73,我为什么喜欢吃麦当劳？,2025-11-07-0147,"","昨天晚上我在床上刷视频的时候，偶然看到了这样一组漫画，潦草的涂鸦画风，但于我而言确能深深地感受到作者想表达的，在痛苦中煎熬而想宣泄出来的感情。
+
+![pintu-fulicat.com-1762479238642.jpg](https://s2.loli.net/2025/11/07/dmyEvXl5JBV6SLH.jpg)
+
+学生时代，麦当劳的汉堡对我来说是一种奢侈。那时我常常困惑：为什么那么贵的东西，店里却总是坐满了人？
+
+没想到，工作以后，我也慢慢喜欢上了麦当劳。
+
+一方面，出租屋周围的饭菜总带着浓重的油味，让人提不起胃口；另一方面，我也突然发现，麦当劳并没有想象中那么贵。
+
+那天晚上，我走进一家麦当劳。灯火辉煌，一切都那么明亮，空气里弥漫着麦乐块和汉堡的香气。
+
+当时的我在处理着公司的一个极为棘手的项目，压力大到无法想象，每天都是折磨与痛苦，难以推进的进展，未来悔暗的道路，每走一步都觉得前方是绝路。因为项目加班，晚上也实在没时间吃什么，也没有胃口，回家的地铁出口正好有一家麦当劳，于是萌生了想去吃吃看的想法。
+
+我找了个边边角角的地方坐下，扫了桌上的二维码，点了两份 1+1 套餐，当时的我惊讶地发现，麦当劳没有自己想象中的那么昂贵，不久取到餐便吃了起来。第一个汉堡吃的是麦香鸡堡，入口的感觉很平淡，怎么去描述呢？那是一种干净的枯燥感，这个形容很奇怪，就是一种不油不腻、面包裹挟着燥热的鸡块的感觉，咀嚼时少量的肉汁流出，但总体仍是干燥，继续吃了几口，这几口中夹杂着生菜和白色的酱汁，确实就是记忆中汉堡的味道。汉堡并不大，其实几口也就吃完了。吃了几根薯条，又喝了几口可乐，我便继续下一个汉堡——双层吉士汉堡。
+
+双层吉士汉堡看起来很漂亮：两片芝士夹着两片小肉排，再被柔软的面包包裹着。我喜欢黄色，尤其是那种明亮的芝士黄。咬下第一口，酸黄瓜和番茄酱的味道立刻冲上舌尖，接着是煎烤牛肉与芝士的香气。我掀开面包看了看，果然——酸黄瓜、番茄酱、芝士，这组合让我忽然想起海绵宝宝的蟹黄堡。
+
+当然，海绵宝宝是后来的，毕竟一定是先有麦当劳，才有那只做汉堡，喜欢上班的海绵。
+
+那幅漫画里的人，点了昂贵的一餐，把东西往自己肚子里塞，想用饱腹感换取一点快乐，最后却吃到想吐。
+
+我懂他在做什么。
+
+我懂他为什么感觉到如此幸福，我也懂他为什么在哭。
+
+是的，麦当劳和别的餐厅不一样。它真的救过我。我被压力与痛苦折磨、觉得人生像死路一样的时候，有这样一个地方让我坐下喘息，让我吃饱，周围是热热闹闹的，没有人会来指责我，我安静地吃着，我重新活了过来。
+
+项目结束，我没有搞砸，一切都是好的，但是我太害怕了，即使已经一年了，我还在害怕。在那之后，我总是喜欢留意工作或者生活周围的麦当劳店铺，在心里默默标记下他们的位置。后面遇到一些郁闷的事情的时候，我也会戴上耳机，徒步走到最近的麦当劳，点一份汉堡、薯条和可乐。安静地坐着，看视频、发呆，二十分钟、半个小时。喝完最后一口可乐，收拾好包装袋，拍一拍衣服，起身离开。
+
+平时不知道吃什么的时候，也总是会去麦当劳坐一坐，点上一个汉堡和一杯可乐。
+
+",published,2025-11-07 01:47:00.000000 +00:00,79
+15,React 前端加载优化,2022/10/11/1813,"","## 主要问题
+这次的 December 项目采用的是前后端分离的技术，交互使用的是 Axios ，但目前遇到的问题是，首次加载网站的时间过于久了，根据 report 的分析，我认为可能存在的问题是 react-router-dom 一次性加载了所有的组件，导致了加载变慢。
+
+所以，主要的解决策略集中在对 router 的懒加载上，让它分批次地加载组件。
+
+当然我还怀疑 React-Mui 组件库也拖慢了网站的加载，毕竟它是有些大的，但是应该还好，毕竟加载时是分开导入的，先解决 Router 的问题吧
+
+## 解决方案
+导入 lazy,Suspense 包
+```js
+import { lazy,Suspense } from 'react';
+```
+lazy 用于懒加载 ， Suspense 用于加载 loading
+```js
+const MyComponent = lazy(() => import('./MyComponent'))
+
+<Suspense fallback={<div>Loading...</div>}>
+	<RouterProvider router={router} />
+</Suspense>
+```",published,2022-10-11 10:13:47.000000 +00:00,71
+53,九月与十月,2023/10/12/0633,"","这个月继续完善 rustic-pages ，这个项目是八月的时候发起的，十月我对它进行了一次重构，目前已经基本完成，代码并没有进行什么模块的拆分，因为我还没完全吃透 rust ，随意套用一些模式会出现意想不到的问题。
+
+因为 rust 的特性，引用借用这些很严格，所以在 0.1.4 以前的版本中，我并没有使用生命周期，所以这不可避免得导致了解析和生成的缓慢，但这仍然是可以接受的。在重构之前，我对 rust 的生命周期理解得还不充分，在拆分模块之后，代码几乎无法正确运行，同时依赖的包也无法自动解析这类的引用类型，我想我在学习 rust 的时候必然是缺失了一些知识，我对数据类型的了解还不够充分。
+
+但是这是一个长期的项目，文档编写的工作也十分繁琐，前期的需求文档已经不足以支持我继续开发了，很多新的特性也在我脑子里蹦出来，我需要更多的时间去完成这些工作。但是目前的我最缺少的就是时间，我仍在准备研究生考试，加之我最近打算弄一个软件著作，时间上总是有些不够呢。
+
+---
+
+不同于之前的观念，维护一个项目是有趣的，将脑海里的新特性实现于代码之中，这确实很有成就感。
+
+当然了，其实我应该多加入一些方便用户使用的脚本或者功能，事实上，目前的版本只能是将 sources 里的 markdown 源文件渲染到 public 里，但是没有实现类似与 Hexo 中的 deploy 指令，这涉及到一些 git 操作，我目前还是不太了解，虽然我在我自己博客中实现了这一脚本，但是我不确定如果这个脚本在其他电脑中会出现些什么。
+
+```bash
+#!/bin/bash
+
+current_datetime=$(date +""%Y-%m-%d %H:%M:%S"")
+TEMP_DIR=$(mktemp -d)
+cp -r public/* ""$TEMP_DIR""
+cd ""$TEMP_DIR""
+git init
+
+git add .
+git commit -m ""Update: $current_datetime""
+git remote add origin ""git@github.com:fengyarnom/fengyarnom.github.io.git""
+git push -f origin ""master:gh-pages""
+# 清理临时目录
+cd ..
+rm -rf ""$TEMP_DIR""
+
+```",published,2023-10-11 22:33:02.000000 +00:00,75
+17,Linux 进程学习 一,2022/10/16/1554,"","## 什么是进程？
+在了解进程的时候，首先得知道什么是程序。
+操作系统其实学过，程序被执行时，操作系统将可执行文件复制到内存中，这就是程序，而进程则是程序的实例，是系统资源分配的基本单位，它被唯一标识于 PCB 之中，也就是进程控制块。
+
+## ps 命令 查看进程
+>Note that ps -aux is distinct from ps aux.  The POSIX and UNIX standards require that ps -aux print all processes owned by a user named x, as well as printing all processes that would be selected by the -a option.  If the user named x does not exist, this ps may
+ interpret the command as ps aux instead and print a warning.  This behavior is intended to aid in transitioning old scripts and habits. It is fragile, subject to change, and thus should not be relied upon.
+
+>To see every process on the system using BSD syntax:
+          ps ax
+          ps axu
+
+也就是说，我们可以通过 **ps axu** 来查看系统中的进程
+
+## top 命令 查看进程
+> The  top program provides a dynamic real-time view of a running system.
+
+这个命令显示的进程状态是动态更新的。
+以下是常用命令：
+- q：退出top命令
+- <Space>：立即刷新
+- s：设置刷新时间间隔
+- t：显示或隐藏进程和CPU状态信息
+- m：显示或隐藏内存状态信息
+- P：按%CPU使用率排行
+- M：按%MEM排行
+- u：指定显示用户进程
+- k：kill进程
+- i：只显示正在运行的进程
+- h：帮助命令。",published,2022-10-16 07:54:11.000000 +00:00,65
+18,Linux 进程学习 二,2022/10/16/1613,"","## 创建进程
+在 Linux 中每个进程都是父进程创建的，Linux 启动时会创建init 进程，这是系统的第一个进程，其 PID 为 1。
+在 C 语言中，我们可以用fork函数创建新的进程：
+```c
+#include <unistd.h>
+pid_t fork(void);
+```
+- If fork() returns a negative value, the creation of a child process was unsuccessful.
+- fork() returns a zero to the newly created child process.
+- fork() returns a positive value, the process ID of the child process, to the parent. The returned process ID is of type pid_t defined in sys/types.h. Normally, the process ID is an integer. Moreover, a process can use function getpid() to retrieve the process ID assigned to this process.
+
+也就是：
+> On success, the PID of the child process is returned in the
+       parent, and 0 is returned in the child.  On failure, -1 is
+       returned in the parent, no child process is created, and errno is
+       set to indicate the error.
+
+也就是：
+- 返回负数，创建失败
+- 返回 0 ，就是子进程，它永远返回 0
+- 返回大于 0 的整数，这是父进程，它会返回子进程的pid
+
+## 终止进程",published,2022-10-16 08:13:33.000000 +00:00,65
+19,给 GIT 和 SSH 配置代理,2022/11/10/2038,"","今天 push 不了项目，估计又是网络的问题，决定还是给git和ssh配置一下代理，不然太难受了。
+配置记录如下：
+1.使用socks5代理，我这边的端口是1089
+```shell
+git config --global http.https://github.com.proxy socks5://127.0.0.1:1089
+```
+
+2.修改 ~/.ssh/config 文件
+```shell
+Host github.com
+    User git
+    ProxyCommand nc -v -x 127.0.0.1:1089 %h %p
+```",published,2022-11-10 12:38:27.000000 +00:00,73
+21,记录一首歌,2022/11/21/1911,"","原唱是：B站UP主 糖醋蛋黄
+
+月昢昢兮 尘莫莫 几时归矩州啊
+风萧萧兮 寒漠漠 远隔离思多啊
+夜行千里做远客 半生半将魂魄赊
+山离离 水漓漓 荒唐事历历",published,2022-11-21 11:11:34.000000 +00:00,75
+20,考研决定,2022-11-11-1035,"","思来想去还是希望去考研，初步定的目标是***『广西大学』***，考取 计算机技术（085404）专硕。
+
+
+1） 初试科目代码
+
+① 101|思想政治理论
+
+② 204|英语（二）
+
+③ 302|数学（二）
+
+④ 828|程序设计与数据结构
+
+科目更少，我的理论并不强，或许这个目标更适合于我。
+
+
+828主要涵盖的内容是***数据结构、程序设计、算法***。",draft,2022-11-11 02:35:00.000000 +00:00,75
+16,git 学习,2022-10-14-2106,"","git 虽说也用了蛮久的了，但是其实来来去去也是一些基础操作，更深入的倒也没有怎么去学，趁着这段时间稍微有些时间，把以前的笔记整理到这里来，也方便之后来查看。
+
+## git commit
+这个命令用于提交记录
+```git
+git commit
+```
+
+## git branch newImage
+这个命令用于创建新的分支。
+
+Git 的分支也非常轻量。它们只是简单地指向某个提交纪录 —— 仅此而已。所以许多 Git 爱好者传颂。
+
+***早建分支！多用分支！***
+
+这是因为即使创建再多的分支也不会造成储存或内存上的开销，并且按逻辑分解工作到不同的分支要比维护那些特别臃肿的分支简单多了。
+
+在将分支和提交记录结合起来后，我们会看到两者如何协作。现在只要记住使用分支其实就相当于在说：“我想基于这个提交以及它所有的父提交进行新的工作。”
+### 创建分支
+```git
+git branch newImage
+```
+### 切换分支
+```git
+git checkout <name>
+```
+
+### 融合分支
+```git
+git merge <name>
+```
+
+## 重基
+```
+git rebase <name>
+```
+
+## ^ 和 ~number
+```git
+可以通过 ^ 符号向上找到父节点
+~ 则是多个
+``` 
+
+## Git Reset
+git reset 通过把分支记录回退几个提交记录来实现撤销改动。你可以将这想象成“改写历史”。git reset 向上移动分支，原来指向的提交记录就跟从来没有提交过一样。
+
+## Git Revert
+虽然在你的本地分支中使用 git reset 很方便，但是这种“改写历史”的方法对大家一起使用的远程分支是无效的哦！
+
+奇怪！在我们要撤销的提交记录后面居然多了一个新提交！这是因为新提交记录 C2' 引入了更改 —— 这些更改刚好是用来撤销 C2 这个提交的。也就是说 C2' 的状态与 C1 是相同的。
+
+revert 之后就可以把你的更改推送到远程仓库与别人分享啦。",draft,2022-10-14 13:06:00.000000 +00:00,68
+23,思考,2022/11/26/1654,"","近日，全国范围内短时间爆发了多次冲突，郑州警民冲突，广州警民冲突，成都小区的自由宣言，乌鲁木齐楼层大火导致的本月25日夜的大游行，这些冲突在不同时间不同地点爆发，历史的潮流开始显现新的迹象。这些冲突的核心诉求是要求政府结束过于严格的防疫措施。
+
+但可以看到的是，游行之中大部分人依旧还带着口罩，这说明三年来中国政府已经将新冠病毒的恐怖植入公民的内心之中，这是深刻而强烈的，即，使得绝大部分公民并非反对防疫，相反，他们普遍认同政府目前的防疫方向，但对他们滥用权利而导致防疫过度有不同程度的怨言。
+
+积压的民意在游行中被宣泄出来，政府的暴力机器所面临地是更深刻的思想斗争，他们收到的命令是镇压一场游行、阻止一次叛乱，抓捕甚至杀死前方聚集的叛乱者，但不管怎么说，请相信它的威能和永远不要相信它的仁慈。
+
+---
+
+2022.11.27 追加。
+
+昨晚，上海 乌鲁木齐路爆发了吊唁活动，与之而来的是新的大聚集事件，请永远小心。最近能看到新闻媒体也在尝试发出更多声音，这种禁锢已经套在他们身上太久了，那样的事件落在自己、家人、朋友身上，都将是一场重大的灾难。",published,2022-11-26 08:54:03.000000 +00:00,75
+24,放开,2022/12/08/2205,"","今天全国范围内都不同程度地放开疫情管控，疫苗接种率和药品的准备不知道是否充足，白纸革命是成功的，但接下来注定会被污名化，这是必然的。
+
+在这三年中，我看到了中央与地方的割裂，虽然说公有制使得中国政府能够调用大量的资源，但是私有制和利欲薰心的人始终存在，权利最终被滥用，或许这其实就是真实的中国。我看到了一个新的事物不断走向灭亡的过程。
+
+但是这是我出生的地方，我爱这片土地，我爱我的家人朋友，每个国家都有着这样或那样的矛盾，我们的国家也不例外，它终究不是儿时课本所描述的那个完美的国家、政府，他们或许已经是最适合的选择了。",published,2022-12-08 14:05:53.000000 +00:00,75
+26,2023 新的一年,2023/01/01/1741,"",致美好与苦难,published,2023-01-01 09:41:23.000000 +00:00,75
+48,七月与八月,2023/08/08/2251,"","七月就这样过去了呢，很久没有写博文了，主要是生活现在千篇一律，没啥想写的内容，总不能写一大堆的流水账不是嘛。
+
+虽说是千篇一律，但最近也是有好好用功的。最近在捣鼓一个新的项目：用 Rust 语言完成静态博客生成器。我目前使用的 Hexo 就是这样的工具，它将markdown文件转换为html文件，再对 tags 和 categories 等内容进行整理。这是之前未曾接触过的代码经历。
+
+事实上，一开始为真的无从下手，于是我开始询问 ChatGPT，这真是一个很棒的人工智能，它认真地回答了我很多的问题，给予了我很多实际地代码。我用了一天时间了解了 rust 的语法，囫囵吞枣地学习显然不足以支撑我完成这个项目，但是有了 ChatGPT 的帮助，事情真的变得容易了很多，之后完成了这个项目，我会写一篇更详细的文章来介绍这一过程。",published,2023-08-08 14:51:43.000000 +00:00,75
+50,我的静态博客生成器,2023/08/27/0922,"","近些日子无心向学，于是又手痒折腾起了代码。
+
+起因是接触到了 Rust 这门语言，并了解到了它的很多特性。我认为这真的是一个很棒的语言并且惊叹于它的性能。正因如此，我决定以此为契机，开始了一个新的项目，一个使用 Rust 编写的静态博客生成器。
+
+## 项目情况
+
+目前它只是一个堪堪能用的状态，我甚至还没想好它的名字，现在只是使用 `static-blog-rust-make` 作为项目名字，我并没有想出一个正式的名字。我目前开源在[Github](https://github.com/fengyarnom/static-blog-rust-make) 上，由于时间实在是不够用，我在有限的时间内已经做到了极限，优化代码和新功能的添加只能在日后完成了，但是，我仍然十分满意于这个项目！
+
+虽然如此，这个生成器确实已经可以正常使用。我用它来重新生成了一个这个网站，并将之前为 Hexo 写的主题应用其中。目前的版本是 ***v0.03*** 。项目仅仅是一个粗劣地模仿 Hexo 的产物，并没有融入很多我的思考，很多核心功能也只是调用别人写好的包，但是这次的代码仍然给我很多地启示，我发觉我开始接触到了很多软件工程的内容，同时对一个项目的整体规划有了一些了解。总之，这一次的项目开发还是很有意思的，之后的一段时间会着手于新的开发文档，并希望能在书写开发文档的过程中，思考更多新的功能。
+
+最后，这是一个非常不完美的项目，里面的代码混乱不堪，复杂的逻辑结构几乎把我压倒。在多次重构和清理冗杂代码后，确实完成了我一开始定下的所有功能需求，但是这样的代码总归让人看了倒胃口，但也只能在之后的日子里慢慢修改完善啦，至少它没有夭折在漫长的开发期中。我确实是以最快的速度开发的，为的就是减少枯燥，目前看来确实如此，我在耐心消耗殆尽前完成了这个项目。",published,2023-08-27 01:22:56.000000 +00:00,71
+51,Rustic-pages 需求与开发文档,2023/08/31/1236,"","## 1. 引言
+
+要求使用 Rust 编写一个高效且易于使用的静态博客生成器，它将能正确处理 Markdown 和 SCSS 文件的文件。
+
+它将支持以下命令行指令：
+
+- `init`： 初始化程序，创建相应文件夹及内容
+
+- `generate` : 渲染和生成所有的静态网站内容
+- `clean` : 清除缓存
+- `server` : 本地部署服务，该指令应该默认调用 `clean` 和 `generate` 
+- `deploy` : 自动部署静态文件到指定仓库
+
+
+
+所有的内容应该均以变量的形式预先准备，然后再根据规则渲染文件。
+
+## 2. 功能需求
+
+### 2.1 博文编辑
+
+- 用户可以创建、编辑和删除博文。
+- 博文内容支持 Markdown 格式，允许用户使用 Markdown 语法编写博文。
+- 用户可以设置博文的标题、发布日期、标签和归档。
+- 用户可以上传图片和附件，并在博文中引用它们。
+- 用户可以保存博文为草稿，随时继续编辑。
+
+### 2.2 博文生成
+
+- 用户可以使用命令行工具生成静态网站。
+- 博客生成器将从用户指定的目录中读取博文和资源文件，并生成静态 HTML 文件。
+- 用户可以指定生成的网站目标路径。
+- 生成的网站应包括主页、博文详细页、归档页、分类页面和标签页面。
+
+### 2.3 主题和样式
+
+- 用户可以选择不同的博客主题和样式。
+- 博客生成器应支持多个默认主题，用户也可以自定义主题。
+- 用户可以自定义网站的样式表（CSS）。
+
+
+
+## 3. 功能模块
+
+### 3.1 数据结构
+
+#### 3.1.1 Post
+
+- title: String
+
+- date: String
+
+- date_simple : String
+
+- published: bool
+
+- tags: Vec<String>
+
+- categories: Vec<String>
+
+- raw_content: String
+
+- content: String
+
+- slug: String
+
+- link: String
+
+  
+
+
+
+#### 3.1.2 Page
+
+-  title: String,
+
+-  date: String,
+
+-  template: String,
+
+-  raw_content: String,
+
+-  content: String,
+
+-  limited_cows:usize,
+
+-  total: usize,
+
+-  current: usize,
+
+-  prev:usize,
+
+-  prev_link: String,
+
+-  next:usize,
+
+-  next_link: String
+
+  
+
+#### 3.1.3 Archive
+
+- posts - Vec<Post>
+- pages: Vec<Page>
+- tags: HashMap<String,Vec<& Post>>
+- categories: HashMap<String,Vec<& Post>>
+
+
+
+#### 3.1.4 Config
+
+pass
+
+### 3.2 构建逻辑（Generate）
+
+1. 程序首先构造一个 Archive 实例，用于保存接下来所有的变量数据。
+
+2. Post 处理过程
+
+   1. 从 /source/content/posts 中获取所有的 markdown 文件，并进行解析，封装为一个可操作的 Post 数据实例。
+   2. 所有的Post 插入到  Archive.posts
+
+3. Tag 处理过程
+
+   1. 遍历 Archive.posts 将每个Post 内的 Tag 解析
+   2. 所有的 Tag 插入到 Archive.tags  
+
+4. Category 处理过程
+
+   1. 遍历 Archive.posts 将每个Post 内的 Category 解析
+   2. 所有的 Category 插入到 Archive.categories
+
+5. 页面构造逻辑
+
+   1. 从 /source/content/pages 中获取所有的 markdown 文件，进行解析，封装为一个可操作的 Page 数据实例
+   2. 所有的 Page 插入到 Archive.pages
+   3. 若是front-matter 带有 pagination: tags,则对 Archive.tags 触发分页
+   4. 若是front-matter 带有 template: xxx ，则渲染模板，否则默认输出 content
+
+   
+
+### 3.3 路径渲染逻辑
+
+- Index - Page
+  - /public/index.html
+  - /public/page/N/index.html
+- Archive
+  - /public/archive/posts/2023/12/10/hello/index.html
+  - /public/archive/tags/技术/index.html
+  - /public/archive/categories/算法/index.html
+- Tags - Page
+  - /public/tags/index.html
+  - /public/tags/page/N/index.html
+- Categories - Page
+  - /public/categories/index.html
+  - /public/categories/page/N/index.html
+- Custom Page
+  - /public/custom/index.html
+  - /public/custom/page/N/index.html
+
+
+
+
+
+
+
+
+
+
+
+
+## README 文档
+
+A lightweight static blog generator developed using Rust
+
+## Usage
+You can compile the source code of this project using the cargo build command.
+```shell
+cargo build
+```
+When you run cargo build, it searches for the Cargo.toml file in the current directory and builds the project based on the configuration information specified in that file.
+`Cargo.toml` is the configuration file for Rust projects and contains the project's dependencies and other build configurations.",published,2023-08-31 04:36:47.000000 +00:00,71
+30,存储扩展,2023/03/04/1318,"","在使用了两年的双系统后，逐渐感觉到了512G是远远不够的，但暂时没有更换硬盘的资金，所以，我计划分别购入256G和128G的SD卡作为系统的扩展。
+
+### 速度测试
+
+由于不是 SSD 硬盘，而且 SD 卡被设计出来主要就是静态的存储，没有类似主控的东西，所以无论是速度还是质量都是难堪大任的，但由于我平时并不怎么使用 windows ， 所以尚能接受。
+
+但为了保险起见，我将使用一张 64G 的 tf 卡测试其最小性能。
+
+64G 的 tf 卡满足整体的使用，所以我购买了一张 128G 的 SD 卡作为虚拟机的硬盘，显然在速度方面它的能够满足我的使用的，那么自要做好备份工作就没问题了。
+
+
+
+### 闪迪 256G 固态U盘
+
+事实上在这个容量上，买一盘固态硬盘更好，同样的价格可以来到500G的容量，而且安全性肯定也是更高的，但是考虑到U盘的体积，所以，我更偏爱于这个U盘。
+
+对于这个U盘，我可能有以下打算：
+
+1.仍然保留双系统，这个固态U盘作为虚拟机硬盘使用。这个打算主要是考虑到SD卡的使用寿命并不安全，很可能在我工作时崩坏，这会导致严重的后果。而这个U盘显然更加的安全一些。
+
+2.不再保留双系统，Linux 系统将独占整个512G的硬盘，同时分离128G出来给Windows虚拟机，之前购买的128G的SD卡作为资料存储卡，256G的固态U盘将安装为 Windows 系统。
+
+我更喜欢第二种方案，因为它更安全可靠。",published,2023-03-04 05:18:01.000000 +00:00,75
+32,工程 [2023_3_25] 附录文件「一」 - Flask 起步,2023/03/26/1521,"","## 前言
+因为前段时间实验室老师要求我完成一个项目，是有关学校教务系统的，要求完成一个微信小程序。
+
+目前处于实验阶段，老师也没有给我需求文档，所以目前的情况就是做些东西练练手。这里记录一下，之后正式工作了能快速完成基本的构建。
+
+> 以下内容转载自 [Flask官方文档](https://flask.palletsprojects.com/en/2.2.x/quickstart/)
+## Flask Installation
+### Create an environment
+Create a project folder and a venv folder within:
+```bash
+$ mkdir myproject
+$ cd myproject
+$ python3 -m venv venv
+```
+### Activate the environment
+
+Before you work on your project, activate the corresponding environment:
+```bash
+$ . venv/bin/activate
+```
+
+### Install Flask
+
+Within the activated environment, use the following command to install Flask:
+```bash
+$ pip install Flask
+```
+
+## Quickstart
+
+A minimal Flask application looks something like this:
+
+```python
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route(""/"")
+def hello_world():
+    return ""<p>Hello, World!</p>""
+```
+
+So what did that code do?
+
+1. First we imported the ```Flask``` class. An instance of this class will be our WSGI application.
+
+2. Next we create an instance of this class. The first argument is the name of the application’s module or package. ```__name__``` is a convenient shortcut for this that is appropriate for most cases. This is needed so that Flask knows where to look for resources such as templates and static files.
+
+3. We then use the route() decorator to tell Flask what URL should trigger our function.
+
+4. The function returns the message we want to display in the user’s browser. The default content type is HTML, so HTML in the string will be rendered by the browser.
+
+Save it as ```hello.py``` or something similar. Make sure to not call your application ```flask.py``` because this would conflict with Flask itself.
+
+To run the application, use the ```flask``` command or ```python -m flask```. You need to tell the Flask where your application is with the ```--app``` option.
+
+```python
+$ flask --app hello run
+ * Serving Flask app 'hello'
+ * Running on http://127.0.0.1:5000 (Press CTRL+C to quit)
+```
+
+### Externally Visible Server
+If you run the server you will notice that the server is only accessible from your own computer, not from any other in the network. This is the default because in debugging mode a user of the application can execute arbitrary Python code on your computer.
+
+If you have the debugger disabled or trust the users on your network, you can make the server publicly available simply by adding ```--host=0.0.0.0``` to the command line:
+
+```python
+$ flask run --host=0.0.0.0
+```
+
+This tells your operating system to listen on all public IPs.
+
+### Debug
+To enable debug mode, use the --debug option.
+```python
+$ flask --app hello run --debug
+ * Serving Flask app 'hello'
+ * Debug mode: on
+ * Running on http://127.0.0.1:5000 (Press CTRL+C to quit)
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: nnn-nnn-nnn
+```
+
+### Routing
+Modern web applications use meaningful URLs to help users. Users are more likely to like a page and come back if the page uses a meaningful URL they can remember and use to directly visit a page.
+
+Use the ```route()``` decorator to bind a function to a URL.
+```python
+@app.route('/')
+def index():
+    return 'Index Page'
+
+@app.route('/hello')
+def hello():
+    return 'Hello, World'
+```
+
+### HTTP Methods
+Web applications use different HTTP methods when accessing URLs. You should familiarize yourself with the HTTP methods as you work with Flask. By default, a route only answers to ```GET``` requests. You can use the ```methods``` argument of the route() decorator to handle different HTTP methods.
+
+```python
+from flask import request
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        return do_the_login()
+    else:
+        return show_the_login_form()
+```
+
+### The Request Object
+The request object is documented in the API section and we will not cover it here in detail (see Request). Here is a broad overview of some of the most common operations. First of all you have to import it from the ```flask``` module:
+```python
+from flask import request
+```
+The current request method is available by using the method attribute. To access form data (data transmitted in a ```POST``` or ```PUT``` request) you can use the form attribute. Here is a full example of the two attributes mentioned above:
+```python
+@app.route('/login', methods=['POST', 'GET'])
+def login():
+    error = None
+    if request.method == 'POST':
+        if valid_login(request.form['username'],
+                       request.form['password']):
+            return log_the_user_in(request.form['username'])
+        else:
+            error = 'Invalid username/password'
+    # the code below is executed if the request method
+    # was GET or the credentials were invalid
+    return render_template('login.html', error=error)
+```",published,2023-03-26 07:21:24.000000 +00:00,66
+33,Debtap,2023/03/26/1554,"","## Setup
+``` bash
+==> You must run at least once ""debtap -u""
+with root privileges (preferably recently),
+before running this script
+
+==> Syntax: debtap [option] package_filename
+
+==> Run ""debtap -h"" for help
+```
+
+### Update debtap source
+```bash
+$ debtap -u
+```
+
+### Convert deb package
+```bash
+debtap xxx.deb
+```
+### Install
+```bash
+sudo pacman -U xxx.pkg
+```",published,2023-03-26 07:54:44.000000 +00:00,70
+34,工程 [2023_3_25] 附录文件「二」 - Flask SQLAlchemy,2023/03/26/1619,"","## 前言
+本文主要介绍 Flask SQLAlchemy 的具体使用。
+
+如需要了解 Flask 入门文档可跳转：
+- [ 附录文件「一」 ](/2023/03/26/工程-2023-3-25-附录文件「一」-Flask-起步/)
+- [ Flask官方文档 ](https://flask.palletsprojects.com/en/2.2.x/quickstart/)
+- [ Flask-Sqlalchemy 官方文档](https://flask-sqlalchemy.palletsprojects.com/en/2.x/queries/)
+## Setup
+### Install MySQL/MariaDB
+#### 1. Installation
+MariaDB is the default implementation of MySQL in Arch Linux, provided with the mariadb package.
+
+**Install mariadb**, and run the following command **before starting** the ```mariadb.service```
+```bash
+# mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
+```
+
+#### 2. Configuration
+Once you have started the MariaDB server and added a root account, you may want to change the default configuration.
+
+To log in as root on the MariaDB server, use the following command:
+```bash
+# mariadb -u root -p
+```
+##### 2.1 Add user
+Creating a new user takes two steps: ```create the user```; ```grant privileges```. In the below example, the user monty with some_pass as password is being created, then granted full permissions to the database mydb:
+
+```bash
+# mariadb -u root -p
+```
+```mysql
+MariaDB> CREATE USER 'monty'@'localhost' IDENTIFIED BY 'some_pass';
+MariaDB> GRANT ALL PRIVILEGES ON mydb.* TO 'monty'@'localhost';
+MariaDB> quit
+```
+
+### 安装 PyMySQL 和 Flask-SQLAlchemy
+使用python 提供 ```pip``` 包管理器安装 ```pymysql``` 和 ```Flask-SQLAlchemy```
+```bash
+$ pip install PyMySQL
+$ pip install flask-sqlalchemy
+```
+#### Connection URI Format
+For a complete list of connection URIs head over to the SQLAlchemy documentation under (Supported Databases). This here shows some common connection strings.
+
+SQLAlchemy indicates the source of an Engine as a URI combined with optional keyword arguments to specify options for the Engine. The form of the URI is:
+```python
+dialect+driver://username:password@host:port/database
+```
+
+MySQL:
+```python
+mysql://scott:tiger@localhost/mydatabase
+```
+
+### Configuration Keys
+**SQLALCHEMY_DATABASE_URI**
+
+The database URI that should be used for the connection. Examples:
+- sqlite:////tmp/test.db
+- mysql://username:password@server/db
+
+### 创建数据库
+安装完上边的套件后，就可以正式创建Mysql数据库了。
+#### 使用root用户创建数据库
+```bash
+sudo mariadb -u root -p 
+```
+进入mariadb后，使用如下命令创建数据库：
+```sql
+MariaDB [(none)]> create database proj_20230325;
+Query OK, 1 row affected (0.000 sec)
+```
+
+#### 给予权限
+之后给予用户 Yarnom 该数据库的所有权限：
+```sql
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON proj_20230325.* TO 'yarnom'@'localhost';
+Query OK, 0 rows affected (0.009 sec)
+```
+### 安装 FLask-Migrate
+```bash
+$ pip install Flask-Migrate
+```
+#### 配置
+```python
+from flask_migrate import Migrate
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = ""mysql+pymysql://yarnom:root@localhost:3306/proj_20230325""
+db = SQLAlchemy(app)
+Migrate(app,db)
+```
+
+#### 初始化
+```bash
+$ flask db init
+```
+
+### Flask 使用Mysql数据库
+创建出相应的模板：
+
+```python
+class Student(db.Model):
+    id = db.Column('id', db.String(100),primary_key=True)
+    name = db.Column('name',db.String(100))
+    def __init__(self, id, name):
+        self.id =id
+        self.name = name
+```    
+
+使用如下命令更新数据库
+```bash
+$ flask db migrate -m ""說明文字""
+$ flask db upgrade
+```
+### Flask-Sqlalchemy 使用
+> 以下内容转载自[flask-sqlalchemy 官方文档](https://flask-sqlalchemy.palletsprojects.com/en/2.x/queries/)
+#### Flask 添加数据
+```python
+me = User('admin', 'admin@example.com')
+db.session.add(me)
+db.session.commit()
+```
+#### Flask 查询数据
+So how do we get data back out of our database? For this purpose Flask-SQLAlchemy provides a query attribute on your Model class. When you access it you will get back a new query object over all records. You can then use methods like filter() to filter the records before you fire the select with all() or first(). If you want to go by primary key you can also use get().
+
+The following queries assume following entries in the database:
+|id|username|email|
+|---|---|---|
+|1|admin|admin@example.com|
+|2|peter|peter@example.org|
+|3|guest|guest@example.com|
+
+Retrieve a user by username:
+```bash
+>>> peter = User.query.filter_by(username='peter').first()
+>>> peter.id
+2
+>>> peter.email
+u'peter@example.org'
+```
+
+Same as above but for a non existing username gives None:
+```bash
+>>> missing = User.query.filter_by(username='missing').first()
+>>> missing is None
+True
+```
+
+Selecting a bunch of users by a more complex expression:
+```bash
+>>> User.query.filter(User.email.endswith('@example.com')).all()
+[<User u'admin'>, <User u'guest'>]
+```
+
+Ordering users by something:
+```bash
+>>> User.query.order_by(User.username).all()
+[<User u'admin'>, <User u'guest'>, <User u'peter'>]
+```
+
+Limiting users:
+```bash
+>>> User.query.limit(1).all()
+[<User u'admin'>]
+```
+Getting user by primary key:
+```bash
+>>> User.query.get(1)
+<User u'admin'>
+```",published,2023-03-26 08:19:51.000000 +00:00,66
+35,对未来的一些思考,2023-03-28-1443,"","这段时间我在写积分题，写到后面的难题感觉特别的痛苦，我自然是不应该放弃的，我应该坚持下去。
+
+虽然如此劝慰自己，但在行动上还是逃避，退后。
+
+自闭。
+
+走了出来，为了什么？
+
+不去逃避就是最大的勇气。",draft,2023-03-28 06:43:00.000000 +00:00,75
+31,隐函数 + 二阶导 = 💩,2023-03-20-1937,"","我宣布，我郑重宣布！！！
+
+计算隐函数的二阶导数，是比💩💩💩还恶心的东西。
+
+计算过程又臭又长。
+
+### 事情的经过
+事情的经过是这样的，我今天遇到了一道题：
+$$
+\\left\\\\{\\begin{aligned}x&=3t^2+2t+3\\\\\\\\e^y&sint-y+1=0\\end{aligned}\\right.
+$$
+
+要求计算 \\\\(\\frac{\\mathrm{d^2} y}{\\mathrm{d} x^2}\\\\) 在 \\\\(t=0\\\\) 的值
+
+当我看到 \\\\(e^ysint-y+1=0 \\\\) 的时候就深感不妙，果不其然，在导的过程中，无数次想死 qvq。",draft,2023-03-20 11:37:00.000000 +00:00,74
+27,停止维护 Hsunr 和 December 项目,2023-02-23-1712,"","## 事情的经过
+2023年2月28日，我的学生价腾讯服务器正式回复原价，一年800块的价格属实有些承受不起；
+
+由于这两个项目都是搭载在服务器端的，服务器停止后近几年也不再有机会在服务器运行维护，从而发现问题，所以从现在开始停止维护 Hsunr和 December这两个项目。
+
+## 转移至 Hexo
+原先基于 Hsunr 项目的博客系统转移到基于 Hexo 的静态博客中，由 Github 托管。在转移的过程中，顺带着写了一套 Hexo 的主题，比较用别人的主题总感觉不是很舒服。",draft,2023-02-23 09:12:00.000000 +00:00,71
+37,[NFS] mount: Connection timed out,2023/04/06/2009,"","## 问题描述
+Linux 服务端和 Arm 开发板客户端进行 NFS 服务的连接。
+
+Linux 和 Arm 开发板之间能ping通，并且处于同一网端，且掩码、网口相同，但是在执行下面的程序时发生超时错误。
+
+在服务端的nfs配置完全正确的情况下，Arm开发板还是无法正确连接nfs服务器。
+
+```bash
+[root@FORLINX6410]# mount -t nfs -o nolock,hard 192.168.1.5:/home/yarnom/nfs /mnt                                                                               
+mount: mounting 192.168.1.5:/home/yarnom/nfs on /mnt failed: Connection timed out
+
+```
+
+## 解决
+这个问题困扰了我两天终于在这个[帖子](https://stackoverflow.com/questions/45938202/mount-nfs-connection-timed-out-on-ubuntu-14-04-1-lts)里找到了解决方案。
+> Mount the NFS filesystem using the TCP protocol instead of the default UDP protocol. Many NFS servers only support UDP.
+
+这是在NFSv3中添加了对TCP协议的支持：
+
+总之，我尝试了下面的命令，使用了tcp协议：
+```bash
+$ mount -t nfs -o nolock,proto=tcp,port=2049 192.168.1.5:/home/yarnom/nfs /mnt
+```
+
+这个协议最终使我正确连接上了nfs服务器。",published,2023-04-06 12:09:29.000000 +00:00,64
+39,重新安装 Archlinux,2023/05/03/1122,"","## 前言
+最近系统频繁死机，通过初步判断，应该是图形界面的卡死，但不合理的是 —— 我无法通过魔法键退出到tty界面……
+
+我尝试了复现，但这似乎是没有规律的，我其实开始怀疑是我的SSD的问题了，但转头用了两天DWM，期间没有出现卡死现象，那问题很大可能就是图形界面卡死，Gnome和我目前的系统内核不匹配？
+
+总之，我决定对系统做一次全面的重置。
+
+这里放一个 Chrome 插件： [Ghelper](/download/Ghelper-v2.8.2.crx)",published,2023-05-03 03:22:11.000000 +00:00,75
+41,Extract tar.gz file to a directory and create the directory if not exist,2023/05/09/1614,"","## Description
+
+I can run the following command to extract the tar.gz file to 'somedir' directory, But this command requires that the directory already exists.
+
+```bash
+tar -xvf somefile.tar.gz -C somedir
+```
+
+
+## Solution
+Following command can extract the somefile.tar.gz file to a directory that does not exist.
+
+```bash
+tar -xf somefile.tar.gz --one-top-level=somedir
+```",published,2023-05-09 08:14:24.000000 +00:00,69
+42,看完了 NeoVim 的 Tutor 文档,2023/05/20/2037,"",今天闲得没事干，于是想起了可以看看 NeoVim 提供的入门文档，是的，它是全英文的，但是里面的单词还是很简单的，颇为流畅地通读了一遍。之前只是知道一些零零散散的命令，如今感觉好多了，又学习到了很多新的知识。,published,2023-05-20 12:37:16.000000 +00:00,75
+44,交给命运,2023/05/30/1907,"","今日学院召开了实习大会，要求成绩达到一定范围内才能获得在校实习的机会，我的理论成绩可能达不到它的要求了，若是没有校内实习的机会，则没有足够多的时间完成复习，那么成功考上的可能性也将大幅度降低。
+
+我仍然在思考未来的走向，我似乎又把自己推入了另一个深渊，我的无能，我的懒惰终究带来了应有的报应……",published,2023-05-30 11:07:31.000000 +00:00,75
+45,忙,2023/06/14/1220,"",最近事情真的很多，实训整得我莫名其妙地很累，也没啥时间写博文，况且静态博客的弊端就是无法随时地去写啦，最近想着要不要用 java 去搭建一个服务，上面用来写一些短的评论或者吐槽的话语，目前的初步想法是这样的。,published,2023-06-14 04:20:18.000000 +00:00,75
+47,🎉 评论区功能上线,2023-06-14-1729,"",今天上线了友链，于是寻思着把评论区也添加上，使用的是 [giscus](https://giscus.app/zh-CN) ，这是利用 [GitHub Discussions](https://docs.github.com/en/discussions) 实现的评论系统。,draft,2023-06-14 09:29:00.000000 +00:00,71
+46,🎉 友链功能上线,2023-06-14-1603,"","今日和朋友闲聊，话题扯到了我们各自的博客上，我周围写博客的人还是蛮少的，很高兴他也一直在写博客，于是我们便萌生了交换友链的想法。
+
+但问题在于，我的博客并没有这个功能，但是 Hexo 完成这个功能也简单，这也是静态博客的一大优势，代码的实现非常简单。
+
+
+
+于是在经过了两分钟的编程后，我正式宣布我的博客友链功能正式上线 ！！！🎉🎉🎉",draft,2023-06-14 08:03:00.000000 +00:00,71
+38,目前学习进展,2023-04-08-1410,"","时间已经进入了四月份，我的学习情况需要得到一次总结。
+
+在这个月中主要巩固了高等数学的基础运算，包括求极限、求积分、求导，这些基础计算能力进行了高强度的训练。积分的题依旧很难，但相比之前已经有了很大的进展。
+
+英语复习仍停留在背单词阶段，还是不敢去尝试真题，这显然是有问题的。",draft,2023-04-08 06:10:00.000000 +00:00,75
+52,Text 1 and Text 2 and Text 3 and Text 4,2023-09-19-1138,"","### Text 4
+
+We’re fairly good at judging people based on first impressions, thin slices of experience ranging from a glimpse of a photo to a five-minute interaction, and deliberation can be not only extraneous but intrusive. In one study of the ability she dubbed “thin slicing,” the late psychologist Nalini Ambady asked participants to watch silent 10-second video clips of professors and to rate the instructor’s overall effectiveness. Their ratings correlated strongly with students’ end-of-semester ratings. Another set of participants had to count backward from 1,000 by nines as they watched the clips, occupying their conscious working memory. Their ratings were just as accurate, demonstrating the intuitive nature of the social processing.
+
+Critically, another group was asked to spend a minute writing down reasons for their judgment, before giving the rating. Accuracy dropped dramatically. Ambady suspected that
+
+deliberation focused them on vivid but misleading cues, such as certain gestures or utterances, rather than letting the complex interplay of subtle signals form a holistic impression. She found similar interference when participants watched 15-second clips of pairs of people and judged whether they were strangers, friends, or dating partners.
+
+Other research shows we’re better at detecting deception and sexual orientation from thin slices when we rely on intuition instead of reflection. “It’s as if you’re driving a stick shift,” says Judith Hall, a psychologist at Northeastern University, “and if you start thinking about it too much, you can’t remember what you’re doing. But if you go on automatic pilot, you’re fine. Much of our social life is like that.”
+
+Thinking too much can also harm our ability to form preferences. College students’ ratings of strawberry jams and college courses aligned better with experts’ opinions when the students weren’t asked to analyze their rationale. And people made car-buying decisions that were both objectively better and more personally satisfying when asked to focus on their feelings rather than on details, but only if the decision was complex—when they had a lot of information to process.
+
+Intuition’s special powers are unleashed only in certain circumstances. In one study, participants completed a battery of eight tasks, including four that tapped reflective thinking (discerning rules, comprehending vocabulary) and four that tapped intuition and creativity (generating new products or figures of speech). Then they rated the degree to which they had used intuition (“gut feelings,” “hunches,” “my heart”). Use of their gut hurt their performance on the first four tasks, as expected, and helped them on the rest. Sometimes the heart is smarter than the head.
+
+- fairly
+- fairly good at
+- deliberation
+- ranging from
+- extraneous
+- intrusive
+
+---
+
+
+
+### Text 3
+
+When Microsoft bought task management app Wunderlist and mobile calendar Sunrise in 2015. It picked up two newcomers that were attracting considerable buzz in Silicon Valley. Microsoft’s own Office dominates the market for “productivity” software, but the start-ups represented a new wave of technology designed from the ground up for the smartphone world.
+
+Both apps, however, were later scrapped, after Microsoft said it had used their best features in its own products. Their teams of engineers stayed on, making them two of the many “acqui-hires” that the biggest companies have used to feed their insatiable hunger for tech-talent.
+
+To Microsoft’s critics, the fates of Wunderlist and Sunrise are examples of a remorseless drive by Big Tech to chew up any innovative companies that lie in their path. “They bought the seedlings and closed them down,” complained Paul Arnold, a partner at San Francisco-based Switch Ventures, putting paid to businesses that might one day turn into competitors. Microsoft declined to comment.
+
+Like other start-up investors. Mr. Arnold’s own business often depends on selling start-ups to larger tech companies, though he admits to mixed feelings about the result: “I think these things are good for me, if I put my selfish hat on. But are they good for the American economy? I don't know.”
+
+The US Federal Trade Commission says it wants to find the answer to that question. This week, it asked the five most valuable US tech companies for information about their many small acquisitions over the past decade. Although only a research project at this stage, the request has raised the prospect of regulators wading into early-stage tech markets that until now have been beyond their reach.
+
+Given their combined market value of more than $5.5tn, rifling through such small deals—many of them much less prominent than Wunderlist and Sunrise—might seem beside the point. Between them, the five companies (Apple, Microsoft, Google, Amazon and Facebook) have spent an average of only $3.4bn a year on sub-$1bn acquisitions over the past five years—a drop in the ocean compared with their massive financial reserves, and the more than $130bn of venture capital that was invested in the US last year.
+
+However, critics say that the big companies use such deals to buy their most threatening potential competitors before their businesses have a chance to gain momentum, in some cases as part of a “buy and kill” tactic to simply close them down.
+
+
+
+**: rifling**
+
+:: ""Rifling"" 是 ""rifle"" 的动名词形式，它通常用于描述枪支的一种内部结构或行为。具体来说，""rifling"" 指的是枪管内的螺旋形槽纹或刻痕，这些槽纹帮助弹丸在射击时旋转，提高射击精度和稳定性。
+
+在枪械领域，枪管内部的 ""rifling"" 起到了非常重要的作用，它有助于使弹丸旋转，从而保持其在飞行中的稳定性，提高了射击的准确性。
+
+""Rifling"" 这个词也可以引申用于其他领域，表示某物被刻上螺旋状的纹路或图案，或者表示某事被彻底搜寻或翻找，但通常情况下，它与枪械和弹道有关。
+
+
+
+- scrapped - 废弃，报废
+- insatiable - 无法满足的，贪得无厌的
+- retain - 保留，保持
+- remorse - 懊悔，内疚
+- remorseless - 无情的，冷酷无情的
+- innovative - 创新的
+- eliminate - 消除，排除
+- investor - 投资者
+- valuable - 有价值的，宝贵的
+- wade into - 涉足，介入
+- the prospect of - ...的前景，...的可能性
+- rifle - 步枪
+- venture - 冒险，风险投资
+- venture capital - 风险投资，风险资本
+- **Financial Capital** - **财务资本**
+
+---
+
+
+
+### Text 2
+
+With the global population predicted to hit close to 10 billion by 2050, and forecasts that agricultural production in some regions will need to nearly double to keep pace, food security is increasingly making headlines. In the UK, it has become a big talking point recently too, for a rather particular reason: Brexit.
+
+Brexit is seen by some as an opportunity to reverse a recent trend towards the UK importing food. The country produces only about 60 per cent of the food it eats, down from almost three-quarters in the late 1980s. A move back to self-sufficiency, the argument goes, would boost the farming industry, political sovereignty and even the nation’s health. Sounds great – but how feasible is this vision?
+
+According to a report on UK food production from the University of Leeds, UK, 85 per cent of the country’s total land area is associated with meat and dairy production. That supplies 80 per cent of what is consumed, so even covering the whole country in livestock farms wouldn’t allow us to cover all our meat and dairy needs.
+
+There are many caveats to those figures, but they are still grave. To become much more self-sufficient, the UK would need to drastically reduce its consumption of animal foods, and probably also farm more intensively – meaning fewer green fields, and more factory-style production.
+
+But switching to a mainly plant-based diet wouldn’t help. There is a good reason why the UK is dominated by animal husbandry: most of its terrain doesn’t have the right soil or climate to grow crops on a commercial basis. Just 25 per cent of the country’s land is suitable for crop-growing, most of which is already occupied by arable fields. Even if we converted all the suitable land to fields of fruit and veg – which would involve taking out all the nature reserves and removing thousands of people from their homes – we would achieve only a 30 per cent boost in crop production.
+
+Just 23 per cent of the fruit and vegetables consumed in the UK are currently home-grown, so even with the most extreme measures we could meet only 30 per cent of our fresh produce needs. That is before we look for the space to grow the grains, sugars, seeds and oils that provide us with the vast bulk of our current calorie intake.
+
+**: 这句话如何理解：for a rather particular reason: Brexit.**
+
+:: 这句话的意思是：出于一个相当特殊的原因，即英国脱欧。
+
+在这句话中，""for"" 表示出于某个原因或目的，而 ""a rather particular reason"" 意指一个相当特殊或独特的原因。最后的冒号 "":"" 通常用来引出一个解释或说明，这里引出了具体的原因，即 ""Brexit""，即英国脱欧。
+
+所以，整句话的含义是，有一个相当特殊的原因，这个原因就是英国脱欧。可能后文会进一步解释或阐述为什么 Brexit 是一个特殊的原因。
+
+**: 这句话如何理解：a rather**
+
+:: ""a rather"" 是一个常见的英语短语，用来表示某事物或情况在程度上略微、相当或有点。它通常用于弱化表达的强度，使其显得更加温和或适度。在句子中，它可以用来修饰形容词、副词或名词，表示程度不是非常强烈，但也不是完全没有。这种短语通常用于正式或文学性的文体，以增强语气或准确表达。
+
+例如：
+
+1. ""It was a rather difficult exam.""（这是一次相当难的考试。）
+2. ""She's a rather talented artist.""（她是一位相当有才华的艺术家。）
+3. ""He seems rather upset today.""（他今天似乎有点不高兴。）
+
+在你提供的句子中，""a rather particular reason"" 意味着这个原因相对特殊，程度上不是非常特殊，但也不是普通或平凡的原因。
+
+**: 这句话如何理解：the argument goes**
+
+:: ""the argument goes"" 是一个常见的表达，用于引出某种观点、论点或看法。它通常用来引导一个说明或解释，以表明某人或某些人所持的观点是什么，或者用来介绍一种普遍的说法或理论。
+
+这个短语的用法示例：
+
+1. ""The argument goes that climate change is a result of human activity.""（有一种观点认为气候变化是人类活动的结果。）
+2. ""The argument goes that reducing taxes will stimulate economic growth.""（有人认为降低税收会刺激经济增长。）
+
+在这些例子中，""the argument goes"" 表示引出了一种观点或理论，用来解释或阐释某个主题或问题。
+
+
+
+- population - 人口
+
+- keep pace - 保持同步，跟上
+
+- opportunity - 机会
+
+- sovereignty - 主权
+
+- feasible - 可行的
+
+- hinder - 阻碍，妨碍
+
+- well-being - 福祉，幸福
+
+- livestock - 家畜
+
+- caveats - 警告，注意事项
+
+- grave - 严重的，重大的
+
+- drastically - 极大地，剧烈地
+
+- terrain - 地形，地势
+
+- territory - 领土，领地
+
+- husbandry - 农业，畜牧业
+
+- arable - 适于耕种的
+
+  
+
+---
+
+### Text 1
+
+“Reskilling” is something that sounds like a buzzword but is actually a requirement if we plan to have a future where a lot of would-be workers do not get left behind. We know we are moving into a period where the jobs in demand will change rapidly, as will the requirements of the jobs that remain. Research by WEF detailed in the Harvard Business Review, finds that on average 42 per cent of the “core skills” within job roles will change by 2022. That is a very short timeline, so we can only imagine what the changes will be further in the future.
+
+The question of who should pay for reskilling is a thorny one. For individual companies, the temptation is always to let go of workers whose skills are no longer in demand and replace them with those whose skills are. That does not always happen. AT&T is often given as the gold standard of a company who decided to do a massive reskilling program rather than go with a fire-and-hire strategy, ultimately retraining 18,000 employers. Prepandemic, other companies including Amazon and Disney had also pledged to create their own plans. When the skills mismatch is in the broader economy though, the focus usually turns to government to handle. Efforts in Canada and elsewhere have been arguably languid at best, and have given us a situation where we frequently hear of employers begging for workers, even at times and in regions where unemployment is high.
+
+With the pandemic, unemployment is very high indeed. In February, at 3.5 per cent and 5.5 per cent respectively, unemployment rates in Canada and the United States were at generational lows and worker shortages were everywhere. As of May, those rates had spiked up to 13.3 per cent and 13.7 per cent, and although many worker shortages had disappeared, not all had done so. In the medical filed, to take an obvious example, the pandemic meant that there were still clear shortages of doctors, nurses and other medical personnel.
+
+Of course, it is not like you can take an unemployed waiter and train him to be a doctor in a few weeks, no matter who pays for it. But even if you cannot close that gap, maybe you can close others, and doing so would be to the benefit of all concerned. That seems to be the case in Sweden: when forced to furlough 90 per cent of their cabin staff, Scandinavian Airlines decided to start up a short retraining program that reskilled the laid-off workers to support hospital staff. The effort was a collective one and involved other companies as well as a Swedish university.
+
+
+
+: 如何翻译这句话：Efforts in Canada and elsewhere have been arguably languid at best
+
+:: 这句话的语法结构比较复杂，让我们逐步解释它：
+
+1. ""Efforts in Canada and elsewhere"" - 这部分指的是在加拿大和其他地方的努力。""Efforts"" 是主语，表示人们所做的努力。
+2. ""have been"" - 这是句子的谓语动词，使用了现在完成时，表示动作或状态从过去某一点一直延续到现在。在这里，它指的是努力的状态或趋势。
+3. ""arguably"" - 这个词表示一种观点或看法，暗示有人可能会提出争议或不同的看法。在这句话中，它表明下文会对努力的程度提出质疑或不同看法。
+4. ""languid"" - 这个词形容努力的性质，意味着努力的进展缓慢，不够有活力或热情。
+5. ""at best"" - 这个短语表示在最好的情况下，即使是最积极的看法也不能改变努力的不足或缓慢。
+
+因此，整句话的意思是，人们在加拿大和其他地方所做的努力在最好的情况下也可以说是进展缓慢，甚至有人会质疑它们是否足够积极。
+
+
+
+ChatGPT
+
+- buzzword - 流行语
+- period - 时期/期间
+- That is a very short timeline - 这是一个非常短的时间表
+- thorny - 棘手的
+- individual - 个体/个人
+- temptation - 诱惑
+- gold standard - 黄金标准
+- massive reskilling program - 大规模再培训计划
+- immediate - 立即的
+- staff appraisal standard - 员工评估标准
+- pandemic - 大流行病
+- prepandemic - 大流行前的
+- pledge to - 承诺
+- languid - 疲倦的/懒散的
+- at best - 最多/充其量
+- begging for workers - 渴望雇佣工人
+- have appeared to be insufficient - 似乎不足
+- inconsistent - 不一致的
+- fierce opposition - 强烈反对
+- respectively - 分别地
+- generational lows - 代际低点
+- spike up - 急剧上升
+- disappeared - 消失
+- not all had done so - 并非所有人都这样做了
+- economic recovery - 经济复苏
+- furlough - 休假/停职
+- collective - 集体的/共同的",draft,2023-09-19 03:38:00.000000 +00:00,78
+54,Clash 删库,2023/11/03/0738,"","昨天 clash for windows 删库，今天（2023-11-03） clash 也删库了。前者的删库并没有太大的影响，因为它只是后者的 GUI 工具而已，但是后者的删库则有些严重了，这意味着clash 彻底失去了更新维护。clash 的开发者可是是为了暂时规避 cfw 的影响，当然也不排除他已经受到了政府的迫害，目前还没有更多的消息。
+
+另一个比较常用的代理软件就是 V2Ray 了, 目前没有看出受到了影响，这取决于开发者是否处于国内，是否会受到政府监控的压力。
+
+这里出现了一个比较悲伤观点：世界上并没有那么多对网络严格监管的国家，这意味着在自由的国家中，并没有如此多的开发者愿意去创造和提供高隐私和高安全性的网络代理工具，这意味着，这类软件的开发者大概率也是受到了互联网的封锁，意味着他们也大概率在独裁威权国家里生活。
+
+我真的感到非常的伤心。
+
+当神话故事中的人类看到带给他们火种的普罗米修斯被锁在高加索山之上，日日被巨鹰啄食的时候，我想他们也会很伤心吧。",published,2023-11-02 23:38:47.000000 +00:00,75
+55,新年快乐,2024/02/09/1227,"","新的一年又到啦，马上就毕业了！大学四年飞快地度过。
+
+`rustic-page` 项目很久没有提交新的代码了，过段时间会提交一些新的功能代码，这个项目我想着尽量不去反复地重构。",published,2024-02-09 04:27:13.000000 +00:00,75
+56,胶片图集 （一）,2024/03/13/0508,"","许久没有写一些博文了，请原谅我，因为生活比较单调，加上最近有一些抑郁的情绪，目前仍然在调整当中。虽然生活千篇一律，但是偶尔也是有出去晒太阳的，也是有好好生活的。
+
+我最近拍了很多的胶片，于是打算放到这里来，让大家看看~
+
+### 正文
+
+这是一个用半幅胶片机拍摄的，黑白的负片，加上半格画幅带来的画质损失，使得这幅照片拥有一种恰到好处的感觉。拍摄的时间是哈尔滨的冬季，可以看到路上都是雪，周围的树木也光秃秃的，黑白拍摄树枝有时候会很杂乱，但是这幅照片倒还好。
+
+这张照片是我的第一卷胶片，当时买了 Canon Demi 初代半格相机，寻思着玩一玩吧，结果一发不可收拾！拿着这台相机在学校到处拍摄，从那时候开始，我彻底爱上了胶片。胶片是一种延迟的体验，一卷胶卷大约能拍32张，而半格则更多了（画幅相对于135mm裁切了一半），也就是需要拍满72张才能取下胶卷，而且拍完无法立即查看，需要送给冲洗店老板冲扫，这又往往还需等待一个礼拜的时间。
+
+![](https://s2.loli.net/2024/03/13/sem6BHucxpFizgD.jpg)
+
+通过胶片，我记录下的照片常常成为我生活的缩影，它介于严肃与不严肃之间，而其本身的质感往往让人感到温暖和怀旧，我后面又陆陆续续买了 佳能 QL17 旁轴、佳能 kiss 1单反、佳能 eos55 单反等，就我而言，单反相对更加容易掌控，其功能与镜头的选择也更加丰富。
+
+与现代相机一样，胶片相机也需要在拍摄时选择光圈，需要权衡景深的大小，而慢速快门则要考虑画面是否会受到抖动的影响，不同的是一旦按下快门则无法修改，一张底片就此定格。
+
+---
+
+
+
+下面这张图的猫猫很可爱的，当时我走过去的时候它主动地帖帖我了，或许是想要我给他挠痒，围着我走了一圈，然后贴在我的鞋边！我怎么能抗拒得了这样的诱惑呢！我充分地挠了挠它的猫猫头后，它也享受地走开了，之后我便去其他地方了，再回来就看到它在边躲太阳边休息。
+
+于是我立马掏出了相机，幸好我有 28-105 的变焦镜头，不用靠得特别近也能拍摄。虽说猫猫看起来很可爱，但它们可听不懂我们人类的话，靠得太近了，惹恼了它可就不愉快了，索性就在不远处保持着距离拍摄。
+
+![](https://s2.loli.net/2024/03/13/whCgKPfqVk5THi1.jpg)
+
+---
+
+
+
+小灯笼和小狮子
+
+虚化带来的好处就是主体很清晰，消除背景细节，可以营造出更为干净、简洁的画面
+
+![](https://s2.loli.net/2024/03/13/JriHgsXEPlFcMUh.jpg)
+
+![](https://s2.loli.net/2024/03/13/ZDSIljEMBPyV6ae.jpg)
+
+---
+
+
+
+这张是在龙母庙拍的，主要是测试一下我新买的镜头 40mm 2.8 光圈全开的虚化效果 。
+
+![](https://s2.loli.net/2024/02/26/IZCtJKz5iyDFNXE.jpg)
+
+---
+
+
+
+这张是半格机拍的， ILFORD PAN 100 好歹也是 100 感光度的胶卷了，但是拍出来还是出现了很明显的颗粒。难道半格相机还得使用 ISO 50 的 5203 拍摄会比较好吗？但是这又出现了一个问题，demi是估焦的，拍摄近物时，往往需要缩小光圈以达到超焦距的效果，然而使用 50 ISO后，便不太能使用小光圈了，因为这可能会导致画面抖动或者欠曝，真是难以抉择呢。
+
+![](https://s2.loli.net/2024/03/13/eAPlrYumJbvc1En.jpg)
+
+---
+
+
+
+接下来的这三张，是我家城市的骑楼城，梧州的河东许多的老建筑特别有历史的底蕴，我很喜欢在这里拍摄黑白的照片，当然彩色的照片也非常好看，有一种不一样的质感。
+
+![](https://s2.loli.net/2024/03/13/xyIRbrpaMdLsHOY.jpg)
+
+![](https://s2.loli.net/2024/03/13/Js5Yp1jb86LOkyT.jpg)
+
+![](https://s2.loli.net/2024/03/13/FtIeHViK5rDQWnT.jpg)
+
+
+
+---
+
+这张图我觉得很棒噢，当时很顺利地抓拍了，其实等车再开过去一些些会好很多呢。
+
+![](https://s2.loli.net/2024/03/13/dfRhWogCMNqLtjA.jpg)
+
+---
+
+最后想说的是，我最近有在尝试自己冲洗黑白胶卷噢，听起来是挺复杂的，但是实际做起来非常的简单，而且特别有成就感，但就不在这篇文章叙述多言了，之后会再写一篇的。
+
+（完）",published,2024-03-12 21:08:23.000000 +00:00,80
+57,归于心,2024/06/05/1354,"","今天是6月7日，果然还是得工作，不工作闲下来就乱想东西
+
+---
+抑郁的情绪最近确实一直困扰着我，现实对我的压迫越来越大，我真的好害怕，恐惧且畏缩贯穿了我这几年的每一个决定，即使是那些看着很勇敢的行为，深究下来不过也就是为了逃避。我真的像舟之行于大海，摇摇荡荡也找不到可以依靠的地方，原来可以避风的港口催促着我离开，我害怕大雨，我感觉我一碰到这些就会被刮得零落。
+
+原本不是这样的，至少在暴风雨来得没有那么频繁的以前，我有听说过“锚”，这是船不再前进时为了不被风浪推走而固定时所用到的，我没有勇气也没有能力再向前，后退又是不被允许，所以只能依靠着锚固定着，不让这些浪催促着移动位置，然而问题就是出现在这些锚上面，我开始恐惧现实，锚开始不起作用了，我能清晰地感受到那种抑郁的情绪，就像心里始终有一股失落的云笼罩着，莫名地害怕，莫名地心怯。具体体现在现实中无论是好的还是坏的事情，我都不想去接触，不想接触人，不想接触事。我很明白这样的情绪是不对的，但是不这样，我的心就好慌……
+
+寓形宇内复几时，曷不委心任去留，我真的无法再劝慰自己努力地面对现实。",published,2024-06-05 05:54:55.000000 +00:00,
+58,NAS 组建计划,2024/06/07/0522,"","近些日子看了很多有关机械硬盘的视频，遂萌生了组一台NAS的想法。
+
+目前我其实是有类NAS的备份系统的，使用的是一台OrangePi 1G RAM ，老实说这个派内存买小了，而且它似乎没有硬件解码，导致我用它解析视频的时候有些吃力，所以在考虑要不要换回x86的cpu 重新组一台 NAS，大机箱还能放很多的机械硬盘。
+
+Orange Pi 配合 Cloudflare 和 frp 进行内网穿透，虽然速度慢了一些，但是确实也不是不能用，配合 Syncthing 这种去中心化的同步工具使用下来也是挺好的，所以我再想什么呢，是新配一个 itx 大小的电脑，还是说重新考虑一个内存大一些的 ARM Pi。
+
+这段时间将两种方案都写出来好好考虑考虑。
+
+（未完）",published,2024-06-06 21:22:57.000000 +00:00,72
+65,不知所云,2024/11/19/1712,"",不必焦虑于未来，最大的苦痛无非也就是死亡。不必焦虑于现在，最大的灾难无非也就是苟活。开心自由地活下去！,published,2024-11-19 09:12:00.000000 +00:00,
+64,痛苦,2025-01-15-1113,"","事情一直没有结果，而努力被认定为理所当然，一旦犯下错误便被严加训责，脑子昏昏沉沉的，讨厌这个社会，讨厌身边的人，看得到头的生命，我明白自己是普通人，但是但是，我真的走不下去了，苟活着，三餐维持得了自己的生命。朝生暮死，何异于虫蝼，无非是稍久几年罢了……怎么会这样啊
+
+劳苦作兮终徒然，哀吾身兮悲且贱，信念几将殆。",published,2025-01-16 03:13:00.000000 +00:00,

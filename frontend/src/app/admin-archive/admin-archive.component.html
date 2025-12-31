@@ -1,0 +1,86 @@
+<section class="admin-page mx-auto max-w-5xl px-[10rem] py-6 space-y-4">
+  <div class="flex items-center justify-between text-sm text-slate-600">
+    <nav class="breadcrumbs">
+      <a routerLink="/" class="link">Home</a>
+      <span class="sep">/</span>
+      <a routerLink="/admin/posts" class="link">Admin</a>
+      <span class="sep">/</span>
+      <div class="crumb-dropdown" (mouseenter)="showMenu=true" (mouseleave)="showMenu=false">
+        <a routerLink="/admin/archive" class="link inline-flex items-center gap-1">
+          Archives <span class="text-xs">▾</span>
+        </a>
+        <div class="menu" *ngIf="showMenu">
+          <a class="menu-item" routerLink="/admin/posts">Posts</a>
+          <a class="menu-item" routerLink="/admin/archive">Archives</a>
+          <a class="menu-item" routerLink="/admin">Emails</a>
+          <a class="menu-item" routerLink="/admin">Memos</a>
+          <a class="menu-item" routerLink="/admin/health">Health</a>
+        </div>
+      </div>
+    </nav>
+    <span class="muted">管理后台归档</span>
+  </div>
+
+  <div class="create-box">
+    <div class="field-inline">
+      <label>新归档</label>
+      <input name="newName" [(ngModel)]="newName" placeholder="名称" />
+      <input name="newDesc" [(ngModel)]="newDesc" placeholder="描述（可选）" />
+      <button class="btn primary" (click)="create()" [disabled]="saving">创建</button>
+    </div>
+    <div class="error" *ngIf="error">{{ error }}</div>
+  </div>
+
+  <div *ngIf="loading" class="muted">加载中...</div>
+  <div *ngIf="!loading">
+    <table class="admin-table">
+      <colgroup>
+        <col style="width: 25%" />
+        <col style="width: 40%" />
+        <col style="width: 20%" />
+        <col style="width: 15%" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>描述</th>
+          <th>创建时间</th>
+          <th class="actions">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let item of archives">
+          <td>
+            <ng-container *ngIf="editingId === item.id; else nameView">
+              <input [(ngModel)]="editName" />
+            </ng-container>
+            <ng-template #nameView>{{ item.name }}</ng-template>
+          </td>
+          <td>
+            <ng-container *ngIf="editingId === item.id; else descView">
+              <input [(ngModel)]="editDesc" />
+            </ng-container>
+            <ng-template #descView>{{ item.description || '—' }}</ng-template>
+          </td>
+          <td><span class="pill tag">{{ item.createdAt | date: 'yyyy-MM-dd HH:mm' }}</span></td>
+          <td class="actions">
+            <div class="action-group" *ngIf="editingId === item.id; else viewActions">
+              <button class="text-btn" (click)="saveEdit()" [disabled]="saving">保存</button>
+              <button class="text-btn" (click)="cancelEdit()" [disabled]="saving">取消</button>
+            </div>
+            <ng-template #viewActions>
+              <div class="action-group">
+                <button class="text-btn" (click)="startEdit(item)">编辑</button>
+                <span class="sep">/</span>
+                <button class="text-btn danger" (click)="remove(item.id)" [disabled]="saving">删除</button>
+              </div>
+            </ng-template>
+          </td>
+        </tr>
+        <tr *ngIf="archives.length === 0">
+          <td colspan="4" class="empty">暂无归档</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>

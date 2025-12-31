@@ -51,7 +51,7 @@ export class HomeComponent implements OnInit {
     this.error = '';
     this.http
       .get<ArticlePayload[]>(`${API_BASE}/articles`, {
-        params: { page: this.page, limit: this.limit },
+        params: { page: this.page, limit: this.limit, status: 'published' },
         observe: 'response'
       })
       .subscribe({

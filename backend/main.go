@@ -22,6 +22,7 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
+	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,6 +48,21 @@ type healthPayload struct {
 	CacheMisses     int64   `json:"cacheMisses"`
 	CacheHitRate    float64 `json:"cacheHitRate"`
 	CacheTTLSeconds int64   `json:"cacheTtlSeconds"`
+}
+
+type user struct {
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"-"`
+	Role         string    `json:"role"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type session struct {
+	ID        string
+	UserID    string
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 type article struct {
@@ -81,6 +97,15 @@ type dbConfig struct {
 type siteConfig struct {
 	Title string `yaml:"title" json:"title"`
 }
+
+const (
+	sessionCookieName = "selfecho_session"
+	sessionTTL        = 7 * 24 * time.Hour
+)
+
+type ctxKey string
+
+const userContextKey ctxKey = "user"
 
 func defaultConfig() config {
 	return config{
@@ -250,6 +275,13 @@ func main() {
 
 	s := &server{db: db, cache: newListCache(30 * time.Second), startedAt: time.Now()}
 
+	if err := s.ensureAuthSchema(context.Background()); err != nil {
+		panic(err)
+	}
+	if err := s.ensureInitialAdmin(context.Background()); err != nil {
+		panic(err)
+	}
+
 	router.GET("/api/hello", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "hello from backend"})
 	})
@@ -278,14 +310,20 @@ func main() {
 	api := router.Group("/api")
 	{
 		api.GET("/articles", s.listArticles)
-		api.POST("/articles", s.createArticle)
-		api.PUT("/articles/:id", s.updateArticle)
-		api.DELETE("/articles/:id", s.deleteArticle)
+		api.POST("/auth/login", s.login)
+		api.POST("/auth/logout", s.logout)
+		api.GET("/auth/me", s.me)
 		api.GET("/archives", s.listArchives)
-		api.POST("/archives", s.createArchive)
-		api.PUT("/archives/:id", s.updateArchive)
-		api.DELETE("/archives/:id", s.deleteArchive)
 		api.GET("/categories", s.listCategories)
+
+		protected := api.Group("/")
+		protected.Use(s.requireAuthMiddleware())
+		protected.POST("/articles", s.createArticle)
+		protected.PUT("/articles/:id", s.updateArticle)
+		protected.DELETE("/articles/:id", s.deleteArticle)
+		protected.POST("/archives", s.createArchive)
+		protected.PUT("/archives/:id", s.updateArchive)
+		protected.DELETE("/archives/:id", s.deleteArchive)
 	}
 
 	if err := s.backfillBodyHTML(context.Background()); err != nil {
@@ -446,6 +484,171 @@ func (s *server) collectHealth() (healthPayload, error) {
 	return hp, nil
 }
 
+func (s *server) ensureAuthSchema(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		CREATE TABLE IF NOT EXISTS users (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			username TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			role TEXT NOT NULL DEFAULT 'admin',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+		CREATE TABLE IF NOT EXISTS sessions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+		CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+		CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+	`)
+	return err
+}
+
+func hashPassword(pw string) (string, error) {
+	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	return string(b), err
+}
+
+func (s *server) createUser(ctx context.Context, username, password, role string) error {
+	username = strings.TrimSpace(username)
+	if username == "" || password == "" {
+		return errors.New("用户名和密码不能为空")
+	}
+	if role == "" {
+		role = "admin"
+	}
+	pwHash, err := hashPassword(password)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) ON CONFLICT (username) DO NOTHING`, username, pwHash, role)
+	return err
+}
+
+func (s *server) ensureInitialAdmin(ctx context.Context) error {
+	var exists bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users)`).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	user := strings.TrimSpace(os.Getenv("ADMIN_USERNAME"))
+	pass := os.Getenv("ADMIN_PASSWORD")
+	if user == "" || pass == "" {
+		fmt.Println("warn: 未检测到用户，且未设置 ADMIN_USERNAME/ADMIN_PASSWORD，后台登录不可用")
+		return nil
+	}
+	fmt.Println("info: 创建初始管理员用户")
+	return s.createUser(ctx, user, pass, "admin")
+}
+
+type sessionWithUser struct {
+	SessionID string
+	User      user
+	Expires   time.Time
+}
+
+func (s *server) loadSession(ctx context.Context, sessionID string) (*sessionWithUser, error) {
+	var swu sessionWithUser
+	err := s.db.QueryRowContext(ctx, `
+		SELECT s.id, s.expires_at, u.id, u.username, u.password_hash, u.role, u.created_at
+		FROM sessions s
+		JOIN users u ON u.id = s.user_id
+		WHERE s.id = $1`, sessionID).
+		Scan(&swu.SessionID, &swu.Expires, &swu.User.ID, &swu.User.Username, &swu.User.PasswordHash, &swu.User.Role, &swu.User.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &swu, nil
+}
+
+func (s *server) createSession(ctx context.Context, userID string) (*sessionWithUser, error) {
+	var swu sessionWithUser
+	err := s.db.QueryRowContext(ctx, `
+		INSERT INTO sessions (user_id, expires_at)
+		VALUES ($1, now() + ($2::int * interval '1 second'))
+		RETURNING id, expires_at`, userID, int(sessionTTL.Seconds())).
+		Scan(&swu.SessionID, &swu.Expires)
+	if err != nil {
+		return nil, err
+	}
+	// load user
+	err = s.db.QueryRowContext(ctx, `
+		SELECT id, username, password_hash, role, created_at FROM users WHERE id=$1`, userID).
+		Scan(&swu.User.ID, &swu.User.Username, &swu.User.PasswordHash, &swu.User.Role, &swu.User.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &swu, nil
+}
+
+func (s *server) deleteSession(ctx context.Context, sessionID string) {
+	s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id=$1`, sessionID)
+}
+
+func (s *server) setSessionCookie(c *gin.Context, sessionID string, expires time.Time) {
+	secure := c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		Expires:  expires,
+		MaxAge:   int(time.Until(expires).Seconds()),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (s *server) clearSessionCookie(c *gin.Context) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (s *server) ensureUser(c *gin.Context) (*user, bool) {
+	if v, ok := c.Get(string(userContextKey)); ok {
+		if u, ok2 := v.(user); ok2 {
+			return &u, true
+		}
+	}
+	cookie, err := c.Cookie(sessionCookieName)
+	if err != nil || cookie == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return nil, false
+	}
+	swu, err := s.loadSession(c.Request.Context(), cookie)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return nil, false
+	}
+	if time.Now().After(swu.Expires) {
+		s.deleteSession(c.Request.Context(), swu.SessionID)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "会话已过期"})
+		return nil, false
+	}
+	c.Set(string(userContextKey), swu.User)
+	return &swu.User, true
+}
+
+func (s *server) requireAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, ok := s.ensureUser(c); !ok {
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 // serveSPA serves the built Angular app directly from disk, falling back to index.html
 // for client-side routes, while keeping API/health 404s intact.
 func serveSPA(router *gin.Engine, staticDir string) {
@@ -548,6 +751,13 @@ func (s *server) listArticles(c *gin.Context) {
 	statusFilter := strings.TrimSpace(c.Query("status"))
 	archiveFilter := strings.TrimSpace(c.Query("archive"))
 	compact := c.Query("compact") == "1" || strings.EqualFold(c.Query("fields"), "compact")
+
+	// 未指定 status 或请求非 published 的数据时，需要鉴权
+	if statusFilter == "" || statusFilter != "published" {
+		if _, ok := s.ensureUser(c); !ok {
+			return
+		}
+	}
 
 	page := 1
 	limit := 6
@@ -870,6 +1080,64 @@ func (s *server) deleteArchive(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 	s.cache.invalidateAll()
+}
+
+func (s *server) login(c *gin.Context) {
+	ctx := c.Request.Context()
+	var payload struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := c.BindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体格式错误"})
+		return
+	}
+	payload.Username = strings.TrimSpace(payload.Username)
+	if payload.Username == "" || payload.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名和密码不能为空"})
+		return
+	}
+
+	var u user
+	err := s.db.QueryRowContext(ctx, `SELECT id, username, password_hash, role, created_at FROM users WHERE username=$1`, payload.Username).
+		Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(payload.Password)) != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
+		return
+	}
+
+	swu, err := s.createSession(ctx, u.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建会话失败"})
+		return
+	}
+	s.setSessionCookie(c, swu.SessionID, swu.Expires)
+	c.JSON(http.StatusOK, gin.H{"username": swu.User.Username, "role": swu.User.Role})
+}
+
+func (s *server) logout(c *gin.Context) {
+	ctx := c.Request.Context()
+	cookie, err := c.Cookie(sessionCookieName)
+	if err == nil && cookie != "" {
+		s.deleteSession(ctx, cookie)
+	}
+	s.clearSessionCookie(c)
+	c.Status(http.StatusNoContent)
+}
+
+func (s *server) me(c *gin.Context) {
+	u, ok := s.ensureUser(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"username": u.Username,
+		"role":     u.Role,
+	})
 }
 
 func (s *server) ensureArchive(ctx context.Context, name string) (string, error) {

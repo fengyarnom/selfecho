@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { Title } from '@angular/platform-browser';
@@ -16,7 +16,7 @@ export class AppComponent implements OnInit {
   menuOpen = false;
   siteTitle = 'Selfecho';
 
-  constructor(private http: HttpClient, private title: Title) {}
+  constructor(private http: HttpClient, private title: Title, private router: Router) {}
 
   ngOnInit(): void {
     this.title.setTitle(this.siteTitle);
@@ -38,6 +38,13 @@ export class AppComponent implements OnInit {
       error: () => {
         // Keep fallback title on error.
       }
+    });
+  }
+
+  goAdmin(): void {
+    this.http.get(`${API_BASE}/auth/me`, { withCredentials: true }).subscribe({
+      next: () => this.router.navigate(['/admin/posts']),
+      error: () => this.router.navigate(['/login'])
     });
   }
 }

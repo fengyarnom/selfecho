@@ -2,9 +2,16 @@ package main
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"html"
+	"io"
+	"mime/quotedprintable"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +21,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/emersion/go-imap"
+	"github.com/emersion/go-imap/client"
+	"github.com/emersion/go-message/mail"
 	"github.com/gin-gonic/gin"
 	"github.com/gosimple/slug"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -65,6 +75,29 @@ type session struct {
 	CreatedAt time.Time
 }
 
+type imapAccount struct {
+	ID              string    `json:"id"`
+	Host            string    `json:"host"`
+	Port            int       `json:"port"`
+	Username        string    `json:"username"`
+	Password        string    `json:"-"`
+	UseSSL          bool      `json:"useSsl"`
+	UseStartTLS     bool      `json:"useStartTls"`
+	LastUID         uint32    `json:"lastUid"`
+	LastUIDValidity uint32    `json:"lastUidValidity"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+type imapMessage struct {
+	UID     uint32   `json:"uid"`
+	Subject string   `json:"subject"`
+	From    string   `json:"from"`
+	Date    string   `json:"date"`
+	Flags   []string `json:"flags"`
+	Snippet string   `json:"snippet"`
+	Body    string   `json:"body"`
+}
+
 type article struct {
 	ID          string     `json:"id"`
 	Title       string     `json:"title"`
@@ -79,10 +112,11 @@ type article struct {
 }
 
 type config struct {
-	Database  dbConfig   `yaml:"database"`
-	Site      siteConfig `yaml:"site"`
-	Port      int        `yaml:"port"`
-	StaticDir string     `yaml:"staticDir"`
+	Database   dbConfig   `yaml:"database"`
+	Site       siteConfig `yaml:"site"`
+	Port       int        `yaml:"port"`
+	StaticDir  string     `yaml:"staticDir"`
+	ImapSecret string     `yaml:"imapSecret"`
 }
 
 type dbConfig struct {
@@ -120,8 +154,9 @@ func defaultConfig() config {
 		Site: siteConfig{
 			Title: "Yarnom'Blog",
 		},
-		Port:      8080,
-		StaticDir: "./static",
+		Port:       8080,
+		StaticDir:  "./static",
+		ImapSecret: "",
 	}
 }
 
@@ -129,6 +164,7 @@ type server struct {
 	db        *sql.DB
 	cache     *listCache
 	startedAt time.Time
+	imapKey   []byte
 }
 
 func (s *server) backfillBodyHTML(ctx context.Context) error {
@@ -261,6 +297,7 @@ func main() {
 	defer db.Close()
 
 	router := gin.Default()
+	router.SetTrustedProxies(nil)
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -273,12 +310,20 @@ func main() {
 		c.Next()
 	})
 
-	s := &server{db: db, cache: newListCache(30 * time.Second), startedAt: time.Now()}
+	secret := cfg.ImapSecret
+	if env := os.Getenv("IMAP_SECRET"); env != "" {
+		secret = env
+	}
+
+	s := &server{db: db, cache: newListCache(30 * time.Second), startedAt: time.Now(), imapKey: deriveKey(secret)}
 
 	if err := s.ensureAuthSchema(context.Background()); err != nil {
 		panic(err)
 	}
 	if err := s.ensureInitialAdmin(context.Background()); err != nil {
+		panic(err)
+	}
+	if err := s.ensureImapSchema(context.Background()); err != nil {
 		panic(err)
 	}
 
@@ -315,6 +360,9 @@ func main() {
 		api.GET("/auth/me", s.me)
 		api.GET("/archives", s.listArchives)
 		api.GET("/categories", s.listCategories)
+		api.GET("/imap/messages", s.listImapMessages)
+		api.GET("/imap/accounts", s.listImapAccounts)
+		api.GET("/imap/messages/:uid", s.getImapMessage)
 
 		protected := api.Group("/")
 		protected.Use(s.requireAuthMiddleware())
@@ -324,6 +372,7 @@ func main() {
 		protected.POST("/archives", s.createArchive)
 		protected.PUT("/archives/:id", s.updateArchive)
 		protected.DELETE("/archives/:id", s.deleteArchive)
+		protected.POST("/imap/accounts", s.createImapAccount)
 	}
 
 	if err := s.backfillBodyHTML(context.Background()); err != nil {
@@ -506,6 +555,53 @@ func (s *server) ensureAuthSchema(ctx context.Context) error {
 	return err
 }
 
+func deriveKey(secret string) []byte {
+	if secret == "" {
+		secret = "selfecho-imap-secret"
+		fmt.Println("warn: imapSecret/IMAP_SECRET 未设置，使用默认密钥，请在生产环境配置")
+	}
+	sum := sha256.Sum256([]byte(secret))
+	return sum[:]
+}
+
+func encryptSecret(key []byte, plaintext string) (string, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	ct := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
+	return base64.StdEncoding.EncodeToString(ct), nil
+}
+
+func decryptSecret(key []byte, cipherText string) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(cipherText)
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	if len(raw) < gcm.NonceSize() {
+		return "", errors.New("ciphertext too short")
+	}
+	nonce, data := raw[:gcm.NonceSize()], raw[gcm.NonceSize():]
+	plain, err := gcm.Open(nil, nonce, data, nil)
+	if err != nil {
+		return "", err
+	}
+	return string(plain), nil
+}
+
 func hashPassword(pw string) (string, error) {
 	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
 	return string(b), err
@@ -543,6 +639,44 @@ func (s *server) ensureInitialAdmin(ctx context.Context) error {
 	}
 	fmt.Println("info: 创建初始管理员用户")
 	return s.createUser(ctx, user, pass, "admin")
+}
+
+func (s *server) ensureImapSchema(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS imap_accounts (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			host TEXT NOT NULL,
+			port INT NOT NULL DEFAULT 993,
+			username TEXT NOT NULL,
+			password TEXT NOT NULL,
+			use_ssl BOOLEAN NOT NULL DEFAULT TRUE,
+			use_starttls BOOLEAN NOT NULL DEFAULT FALSE,
+			last_uid BIGINT NOT NULL DEFAULT 0,
+			last_uidvalidity BIGINT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+		CREATE INDEX IF NOT EXISTS idx_imap_accounts_host ON imap_accounts(host);
+		ALTER TABLE imap_accounts ADD COLUMN IF NOT EXISTS use_starttls BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE imap_accounts ADD COLUMN IF NOT EXISTS last_uid BIGINT NOT NULL DEFAULT 0;
+		ALTER TABLE imap_accounts ADD COLUMN IF NOT EXISTS last_uidvalidity BIGINT NOT NULL DEFAULT 0;
+
+		CREATE TABLE IF NOT EXISTS imap_messages (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			account_id UUID NOT NULL REFERENCES imap_accounts(id) ON DELETE CASCADE,
+			uid BIGINT NOT NULL,
+			uidvalidity BIGINT NOT NULL,
+			subject TEXT,
+			from_addr TEXT,
+			msg_date TIMESTAMPTZ,
+			flags TEXT,
+			body_html TEXT,
+			body_plain TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			UNIQUE(account_id, uid, uidvalidity)
+		);
+		CREATE INDEX IF NOT EXISTS idx_imap_messages_acc_date ON imap_messages(account_id, msg_date DESC);
+	`)
+	return err
 }
 
 type sessionWithUser struct {
@@ -1138,6 +1272,590 @@ func (s *server) me(c *gin.Context) {
 		"username": u.Username,
 		"role":     u.Role,
 	})
+}
+
+func (s *server) listImapAccounts(c *gin.Context) {
+	rows, err := s.db.Query(`SELECT id, host, port, username, use_ssl, use_starttls, last_uid, last_uidvalidity, created_at FROM imap_accounts ORDER BY created_at DESC`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询 IMAP 账号失败"})
+		return
+	}
+	defer rows.Close()
+	var items []imapAccount
+	for rows.Next() {
+		var a imapAccount
+		if err := rows.Scan(&a.ID, &a.Host, &a.Port, &a.Username, &a.UseSSL, &a.UseStartTLS, &a.LastUID, &a.LastUIDValidity, &a.CreatedAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "解析 IMAP 账号失败"})
+			return
+		}
+		items = append(items, a)
+	}
+	c.JSON(http.StatusOK, items)
+}
+
+func (s *server) createImapAccount(c *gin.Context) {
+	var payload struct {
+		Host        string `json:"host"`
+		Port        int    `json:"port"`
+		Username    string `json:"username"`
+		Password    string `json:"password"`
+		UseSSL      bool   `json:"useSsl"`
+		UseStartTLS bool   `json:"useStartTls"`
+	}
+	if err := c.BindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体格式错误"})
+		return
+	}
+	payload.Host = strings.TrimSpace(payload.Host)
+	payload.Username = strings.TrimSpace(payload.Username)
+	if payload.Port == 0 {
+		payload.Port = 993
+	}
+	if payload.Host == "" || payload.Username == "" || payload.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "地址、用户名、密码不能为空"})
+		return
+	}
+
+	secret := payload.Password
+	if s.imapKey != nil {
+		enc, err := encryptSecret(s.imapKey, payload.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("加密密码失败: %v", err)})
+			return
+		}
+		secret = enc
+	}
+
+	_, err := s.db.Exec(
+		`INSERT INTO imap_accounts (host, port, username, password, use_ssl, use_starttls) VALUES ($1, $2, $3, $4, $5, $6)`,
+		payload.Host, payload.Port, payload.Username, secret, payload.UseSSL, payload.UseStartTLS,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("保存 IMAP 账号失败: %v", err)})
+		return
+	}
+	c.Status(http.StatusCreated)
+}
+
+func (s *server) listImapMessages(c *gin.Context) {
+	ctx := c.Request.Context()
+	accountID := strings.TrimSpace(c.Query("accountId"))
+	limit := 12
+	if l, err := strconv.Atoi(strings.TrimSpace(c.Query("limit"))); err == nil && l > 0 && l <= 100 {
+		limit = l
+	}
+	page := 1
+	if p, err := strconv.Atoi(strings.TrimSpace(c.Query("page"))); err == nil && p > 0 {
+		page = p
+	}
+	offset := (page - 1) * limit
+
+	acc, err := s.pickImapAccount(ctx, accountID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if acc == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未找到 IMAP 账号，请先创建"})
+		return
+	}
+
+	msgs, err := s.readCachedMessages(ctx, acc.ID, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("读取邮件失败: %v", err)})
+		return
+	}
+	total, _ := s.countCachedMessages(ctx, acc.ID)
+	if len(msgs) > 0 {
+		c.Header("X-Total-Count", strconv.Itoa(total))
+		s.syncImapAccountAsync(*acc, 50)
+		c.JSON(http.StatusOK, msgs)
+		return
+	}
+
+	if err := s.syncImapAccount(ctx, acc, 50); err != nil {
+		fmt.Printf("warn: 同步 IMAP 失败: %v\n", err)
+	}
+
+	msgs, err = s.readCachedMessages(ctx, acc.ID, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("读取邮件失败: %v", err)})
+		return
+	}
+	total, _ = s.countCachedMessages(ctx, acc.ID)
+	if len(msgs) == 0 {
+		// fallback 直接拉取
+		if fresh, ferr := fetchImapMessages(ctx, *acc, limit); ferr == nil {
+			c.Header("X-Total-Count", strconv.Itoa(len(fresh)))
+			c.JSON(http.StatusOK, fresh)
+			return
+		}
+	}
+	c.Header("X-Total-Count", strconv.Itoa(total))
+	c.JSON(http.StatusOK, msgs)
+}
+
+func (s *server) pickImapAccount(ctx context.Context, id string) (*imapAccount, error) {
+	var row *sql.Row
+	if id != "" {
+		row = s.db.QueryRowContext(ctx, `SELECT id, host, port, username, password, use_ssl, use_starttls, last_uid, last_uidvalidity, created_at FROM imap_accounts WHERE id=$1`, id)
+	} else {
+		row = s.db.QueryRowContext(ctx, `SELECT id, host, port, username, password, use_ssl, use_starttls, last_uid, last_uidvalidity, created_at FROM imap_accounts ORDER BY created_at DESC LIMIT 1`)
+	}
+	var acc imapAccount
+	if err := row.Scan(&acc.ID, &acc.Host, &acc.Port, &acc.Username, &acc.Password, &acc.UseSSL, &acc.UseStartTLS, &acc.LastUID, &acc.LastUIDValidity, &acc.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if s.imapKey != nil && acc.Password != "" {
+		if dec, err := decryptSecret(s.imapKey, acc.Password); err == nil {
+			acc.Password = dec
+		}
+	}
+	return &acc, nil
+}
+
+func fetchImapMessages(ctx context.Context, acc imapAccount, limit int) ([]imapMessage, error) {
+	address := fmt.Sprintf("%s:%d", acc.Host, acc.Port)
+	var c *client.Client
+	var err error
+	if acc.UseSSL {
+		c, err = client.DialTLS(address, nil)
+	} else {
+		c, err = client.Dial(address)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer c.Logout()
+
+	if !acc.UseSSL && acc.UseStartTLS {
+		if err := c.StartTLS(nil); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := c.Login(acc.Username, acc.Password); err != nil {
+		return nil, err
+	}
+
+	mbox, err := c.Select("INBOX", true)
+	if err != nil {
+		return nil, err
+	}
+	if mbox.Messages == 0 {
+		return []imapMessage{}, nil
+	}
+
+	var from uint32 = 1
+	if mbox.Messages > uint32(limit) {
+		from = mbox.Messages - uint32(limit) + 1
+	}
+	set := new(imap.SeqSet)
+	set.AddRange(from, mbox.Messages)
+
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid}
+	messages := make(chan *imap.Message, limit)
+	if err := c.Fetch(set, items, messages); err != nil {
+		return nil, err
+	}
+
+	var result []imapMessage
+	for msg := range messages {
+		var fromAddr string
+		if msg.Envelope != nil && len(msg.Envelope.From) > 0 {
+			fromAddr = msg.Envelope.From[0].Address()
+		}
+		date := ""
+		if msg.Envelope != nil {
+			date = msg.Envelope.Date.Format(time.RFC3339)
+		}
+		result = append([]imapMessage{
+			{
+				UID:     msg.Uid,
+				Subject: msg.Envelope.Subject,
+				From:    fromAddr,
+				Date:    date,
+				Flags:   msg.Flags,
+				Snippet: "",
+			},
+		}, result...)
+	}
+	// reverse already prepended, so order newest-first
+	return result, nil
+}
+
+func (s *server) getImapMessage(c *gin.Context) {
+	ctx := c.Request.Context()
+	accountID := strings.TrimSpace(c.Query("accountId"))
+	uidStr := c.Param("uid")
+	uid64, err := strconv.ParseUint(uidStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "uid 非法"})
+		return
+	}
+
+	acc, err := s.pickImapAccount(ctx, accountID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if acc == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未找到 IMAP 账号，请先创建"})
+		return
+	}
+
+	msg, err := s.readCachedMessage(ctx, acc.ID, uint32(uid64))
+	if err == nil {
+		s.syncImapAccountAsync(*acc, 20)
+		c.JSON(http.StatusOK, msg)
+		return
+	}
+
+	lastErr := err
+
+	if err := s.syncImapAccount(ctx, acc, 20); err != nil {
+		fmt.Printf("warn: 同步 IMAP 失败: %v\n", err)
+		lastErr = err
+	}
+
+	msg, err = s.readCachedMessage(ctx, acc.ID, uint32(uid64))
+	if err == nil {
+		c.JSON(http.StatusOK, msg)
+		return
+	}
+	if err != nil {
+		lastErr = err
+	}
+
+	if direct, derr := fetchImapMessageDetail(ctx, *acc, uint32(uid64)); derr == nil {
+		c.JSON(http.StatusOK, direct)
+		return
+	} else {
+		lastErr = derr
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("加载邮件失败: %v", lastErr)})
+}
+
+func fetchImapMessageDetail(ctx context.Context, acc imapAccount, uid uint32) (imapMessage, error) {
+	address := fmt.Sprintf("%s:%d", acc.Host, acc.Port)
+	var c *client.Client
+	var err error
+	if acc.UseSSL {
+		c, err = client.DialTLS(address, nil)
+	} else {
+		c, err = client.Dial(address)
+	}
+	if err != nil {
+		return imapMessage{}, err
+	}
+	defer c.Logout()
+
+	if !acc.UseSSL && acc.UseStartTLS {
+		if err := c.StartTLS(nil); err != nil {
+			return imapMessage{}, err
+		}
+	}
+	if err := c.Login(acc.Username, acc.Password); err != nil {
+		return imapMessage{}, err
+	}
+	if _, err := c.Select("INBOX", true); err != nil {
+		return imapMessage{}, err
+	}
+
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(uid)
+	section := &imap.BodySectionName{}
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid, section.FetchItem()}
+	ch := make(chan *imap.Message, 1)
+	if err := c.Fetch(seqset, items, ch); err != nil {
+		return imapMessage{}, err
+	}
+	msg, ok := <-ch
+	if !ok || msg == nil || msg.Envelope == nil {
+		return imapMessage{}, errors.New("邮件不存在")
+	}
+
+	body, _ := parseBody(msg.GetBody(section))
+
+	var fromAddr string
+	if len(msg.Envelope.From) > 0 {
+		fromAddr = safeUTF8(msg.Envelope.From[0].Address())
+	}
+	date := msg.Envelope.Date.Format(time.RFC3339)
+
+	return imapMessage{
+		UID:     msg.Uid,
+		Subject: safeUTF8(msg.Envelope.Subject),
+		From:    fromAddr,
+		Date:    date,
+		Flags:   msg.Flags,
+		Snippet: "",
+		Body:    safeUTF8(body),
+	}, nil
+}
+
+func parseBody(body io.Reader) (string, error) {
+	if body == nil {
+		return "", nil
+	}
+	mr, err := mail.CreateReader(body)
+	if err != nil {
+		b, _ := io.ReadAll(body)
+		return escapeText(string(b)), nil
+	}
+	var htmlBody string
+	var textBody string
+	for {
+		p, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if ih, ok := p.Header.(*mail.InlineHeader); ok {
+			mt, _, _ := ih.ContentType()
+			data, _ := decodePart(ih, p.Body)
+			if strings.HasPrefix(mt, "text/html") && len(data) > 0 {
+				htmlBody = safeUTF8(string(data))
+			} else if strings.HasPrefix(mt, "text/plain") && textBody == "" {
+				textBody = safeUTF8(string(data))
+			}
+		}
+	}
+	if htmlBody != "" {
+		return htmlBody, nil
+	}
+	if textBody != "" {
+		return escapeText(textBody), nil
+	}
+	return "", nil
+}
+
+func escapeText(s string) string {
+	return strings.ReplaceAll(html.EscapeString(s), "\n", "<br>")
+}
+
+func decodePart(ih *mail.InlineHeader, r io.Reader) ([]byte, error) {
+	if ih == nil {
+		return io.ReadAll(r)
+	}
+	cte := ih.Header.Get("Content-Transfer-Encoding")
+	switch strings.ToLower(cte) {
+	case "base64":
+		r = base64.NewDecoder(base64.StdEncoding, r)
+	case "quoted-printable":
+		r = quotedprintable.NewReader(r)
+	}
+	return io.ReadAll(r)
+}
+
+func (s *server) syncImapAccountAsync(acc imapAccount, limit int) {
+	go func(a imapAccount) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := s.syncImapAccount(ctx, &a, limit); err != nil {
+			fmt.Printf("warn: 同步 IMAP 失败: %v\n", err)
+		}
+	}(acc)
+}
+
+func (s *server) syncImapAccount(ctx context.Context, acc *imapAccount, limit int) error {
+	address := fmt.Sprintf("%s:%d", acc.Host, acc.Port)
+	var c *client.Client
+	var err error
+	if acc.UseSSL {
+		c, err = client.DialTLS(address, nil)
+	} else {
+		c, err = client.Dial(address)
+	}
+	if err != nil {
+		return err
+	}
+	defer c.Logout()
+
+	if !acc.UseSSL && acc.UseStartTLS {
+		if err := c.StartTLS(nil); err != nil {
+			return err
+		}
+	}
+	if err := c.Login(acc.Username, acc.Password); err != nil {
+		return err
+	}
+
+	mbox, err := c.Select("INBOX", true)
+	if err != nil {
+		return err
+	}
+	if mbox.Messages == 0 {
+		_, _ = s.db.ExecContext(ctx, `DELETE FROM imap_messages WHERE account_id=$1`, acc.ID)
+		_, _ = s.db.ExecContext(ctx, `UPDATE imap_accounts SET last_uid=$1, last_uidvalidity=$2 WHERE id=$3`, 0, mbox.UidValidity, acc.ID)
+		acc.LastUID = 0
+		acc.LastUIDValidity = mbox.UidValidity
+		return nil
+	}
+
+	from := uint32(1)
+	if mbox.Messages > uint32(limit) {
+		from = mbox.Messages - uint32(limit) + 1
+	}
+	set := new(imap.SeqSet)
+	set.AddRange(from, mbox.Messages)
+
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid}
+	messages := make(chan *imap.Message, limit)
+	if err := c.Fetch(set, items, messages); err != nil {
+		return err
+	}
+
+	type row struct {
+		uid uint32
+		msg *imap.Message
+	}
+	var fetched []row
+	for msg := range messages {
+		if msg == nil || msg.Envelope == nil {
+			continue
+		}
+		fetched = append(fetched, row{uid: msg.Uid, msg: msg})
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// reset on uidvalidity change (except initial 0)
+	if acc.LastUIDValidity != 0 && acc.LastUIDValidity != mbox.UidValidity {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM imap_messages WHERE account_id=$1`, acc.ID); err != nil {
+			return err
+		}
+		acc.LastUID = 0
+	}
+
+	var maxUID uint32 = acc.LastUID
+	for i := len(fetched) - 1; i >= 0; i-- { // ensure ascending insert
+		msg := fetched[i].msg
+		uid := fetched[i].uid
+		if uid <= acc.LastUID {
+			continue
+		}
+		if uid > maxUID {
+			maxUID = uid
+		}
+		detail, err := fetchImapMessageDetail(ctx, *acc, uid)
+		if err != nil {
+			continue
+		}
+		var msgTime *time.Time
+		if detail.Date != "" {
+			if t, err := time.Parse(time.RFC3339, detail.Date); err == nil {
+				msgTime = &t
+			}
+		}
+		flags := strings.Join(detail.Flags, " ")
+		if msgTime == nil && msg.Envelope != nil {
+			t := msg.Envelope.Date
+			msgTime = &t
+		}
+		subj := safeUTF8(detail.Subject)
+		from := safeUTF8(detail.From)
+		body := safeUTF8(detail.Body)
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO imap_messages (account_id, uid, uidvalidity, subject, from_addr, msg_date, flags, body_html, body_plain)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			ON CONFLICT (account_id, uid, uidvalidity) DO UPDATE
+			SET subject=EXCLUDED.subject, from_addr=EXCLUDED.from_addr, msg_date=EXCLUDED.msg_date,
+			    flags=EXCLUDED.flags, body_html=EXCLUDED.body_html, body_plain=EXCLUDED.body_plain
+		`, acc.ID, uid, mbox.UidValidity, subj, from, msgTime, flags, body, "")
+		if err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE imap_accounts SET last_uid=$1, last_uidvalidity=$2 WHERE id=$3`, maxUID, mbox.UidValidity, acc.ID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	acc.LastUID = maxUID
+	acc.LastUIDValidity = mbox.UidValidity
+	return nil
+}
+
+func (s *server) readCachedMessages(ctx context.Context, accountID string, limit, offset int) ([]imapMessage, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT uid, subject, from_addr, msg_date, flags, body_html, body_plain
+		FROM imap_messages
+		WHERE account_id=$1
+		ORDER BY msg_date DESC NULLS LAST
+		LIMIT $2 OFFSET $3`, accountID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []imapMessage
+	for rows.Next() {
+		var m imapMessage
+		var flags string
+		var msgDate sql.NullTime
+		var bodyHTML, bodyPlain sql.NullString
+		if err := rows.Scan(&m.UID, &m.Subject, &m.From, &msgDate, &flags, &bodyHTML, &bodyPlain); err != nil {
+			return nil, err
+		}
+		if msgDate.Valid {
+			m.Date = msgDate.Time.Format(time.RFC3339)
+		}
+		if flags != "" {
+			m.Flags = strings.Fields(flags)
+		}
+		if bodyHTML.Valid && bodyHTML.String != "" {
+			m.Body = bodyHTML.String
+		} else if bodyPlain.Valid && bodyPlain.String != "" {
+			m.Body = escapeText(bodyPlain.String)
+		}
+		res = append(res, m)
+	}
+	return res, nil
+}
+
+func (s *server) countCachedMessages(ctx context.Context, accountID string) (int, error) {
+	var total int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM imap_messages WHERE account_id=$1`, accountID).Scan(&total)
+	return total, err
+}
+
+func (s *server) readCachedMessage(ctx context.Context, accountID string, uid uint32) (imapMessage, error) {
+	var m imapMessage
+	var flags string
+	var msgDate sql.NullTime
+	var bodyHTML, bodyPlain sql.NullString
+	err := s.db.QueryRowContext(ctx, `
+		SELECT uid, subject, from_addr, msg_date, flags, body_html, body_plain
+		FROM imap_messages
+		WHERE account_id=$1 AND uid=$2
+	`, accountID, uid).Scan(&m.UID, &m.Subject, &m.From, &msgDate, &flags, &bodyHTML, &bodyPlain)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return m, errors.New("未找到邮件")
+		}
+		return m, err
+	}
+	if msgDate.Valid {
+		m.Date = msgDate.Time.Format(time.RFC3339)
+	}
+	if flags != "" {
+		m.Flags = strings.Fields(flags)
+	}
+	if bodyHTML.Valid && bodyHTML.String != "" {
+		m.Body = bodyHTML.String
+	} else if bodyPlain.Valid && bodyPlain.String != "" {
+		m.Body = escapeText(bodyPlain.String)
+	}
+	return m, nil
 }
 
 func (s *server) ensureArchive(ctx context.Context, name string) (string, error) {

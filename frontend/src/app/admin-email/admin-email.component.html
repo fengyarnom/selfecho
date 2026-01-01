@@ -1,0 +1,164 @@
+<section class="admin-page mx-auto max-w-5xl px-6 py-6 space-y-4 sm:px-9 md:px-12 lg:px-[10rem]">
+  <div class="flex items-center justify-between text-sm text-slate-600 top-row">
+    <nav class="breadcrumbs">
+      <a routerLink="/" class="link">Home</a>
+      <span class="sep">/</span>
+      <a routerLink="/admin/posts" class="link">Admin</a>
+      <span class="sep">/</span>
+      <div class="crumb-dropdown" (mouseenter)="showMenu=true" (mouseleave)="showMenu=false">
+        <a routerLink="/admin/email" class="link inline-flex items-center gap-1">
+          Email <span class="text-xs">▾</span>
+        </a>
+        <div class="menu" *ngIf="showMenu">
+          <a class="menu-item" routerLink="/admin/posts">Posts</a>
+          <a class="menu-item" routerLink="/admin/archive">Archives</a>
+          <a class="menu-item" routerLink="/admin/email">Email</a>
+          <a class="menu-item" routerLink="/admin">Memos</a>
+          <a class="menu-item" routerLink="/admin/health">Health</a>
+        </div>
+      </div>
+      <ng-container *ngIf="view === 'imap'">
+        <span class="sep">/</span>
+        <span class="crumb-leaf">Imap 管理</span>
+      </ng-container>
+      <ng-container *ngIf="view === 'email' && selected">
+        <span class="sep">/</span>
+        <span class="crumb-leaf">{{ selected.subject || '(无主题)' }}</span>
+      </ng-container>
+    </nav>
+    <div class="inline-actions">
+      <button *ngIf="view === 'email' && selected" class="text-link" (click)="selected = null">返回邮件列表</button>
+      <button *ngIf="!(view === 'email' && selected)" class="text-link" (click)="setView(view === 'email' ? 'imap' : 'email')">
+        {{ view === 'email' ? 'Imap 管理' : '返回 Email' }}
+      </button>
+    </div>
+  </div>
+
+  <div *ngIf="view === 'email' && !selected" class="stack space-y-4">
+    <div class="section-header">
+      <div>
+        <h2 class="title">最新邮件</h2>
+        <div class="muted" *ngIf="accounts.length && selectedAccountId">
+          当前账号：{{ currentAccount?.username }} &#64; {{ currentAccount?.host }}
+        </div>
+      </div>
+      <div class="inline-actions">
+        <button class="text-link" (click)="loadMessages()" [disabled]="loading">刷新</button>
+      </div>
+    </div>
+
+    <div class="account-switch" *ngIf="accounts.length">
+      <span class="muted">切换账号：</span>
+      <button
+        *ngFor="let acc of accounts"
+        class="pill-btn"
+        [class.active]="selectedAccountId === acc.id"
+        (click)="loadMessages(acc.id)"
+        [disabled]="loading"
+      >
+        {{ acc.username }}&#64;{{ acc.host }}
+      </button>
+    </div>
+
+    <div *ngIf="error" class="error">{{ error }}</div>
+    <div *ngIf="loading" class="muted">加载中...</div>
+    <div *ngIf="!loading && messages.length === 0" class="muted">暂无邮件</div>
+
+    <table class="email-table" *ngIf="!loading && messages.length">
+      <thead>
+        <tr>
+          <th>主题 / 摘要</th>
+          <th>发件人</th>
+          <th>时间</th>
+          <th>标签</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let m of messages" class="clickable">
+          <td class="subject-cell">
+            <button class="subject-link" type="button" (click)="openMessage(m.uid)">
+              {{ m.subject || '(无主题)' }}
+            </button>
+            <div class="snippet" *ngIf="m.snippet">{{ m.snippet }}</div>
+          </td>
+          <td class="from-cell"><span class="chip subtle-chip">{{ m.from }}</span></td>
+          <td class="date-cell"><span class="chip subtle-chip">{{ m.date | date: 'yyyy-MM-dd HH:mm' }}</span></td>
+          <td class="flags-cell">
+            <span *ngFor="let f of m.flags" class="flag-pill">{{ f }}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="pager" *ngIf="totalPages > 1">
+      <button class="pager-btn" (click)="prevPage()" [disabled]="page === 1 || loading">上一页</button>
+      <span class="pager-info">第 {{ page }} / {{ totalPages }} 页</span>
+      <button class="pager-btn" (click)="nextPage()" [disabled]="page >= totalPages || loading">下一页</button>
+    </div>
+  </div>
+
+  <div *ngIf="view === 'email' && selected" class="detail-only space-y-4">
+    <div class="section-header detail-header">
+      <div>
+        <h2 class="title">{{ selected.subject || '(无主题)' }}</h2>
+        <div class="muted">
+          {{ selected.from }} · {{ selected.date | date: 'yyyy-MM-dd HH:mm' }}
+        </div>
+      </div>
+    </div>
+    <div class="detail-body" [innerHTML]="selected.body"></div>
+    <div class="detail-footer">
+      <button class="text-link" (click)="selected = null">返回</button>
+    </div>
+  </div>
+
+  <div *ngIf="view === 'imap'" class="imap-view space-y-4">
+    <div class="section-header">
+      <h2 class="title">IMAP 账号</h2>
+      <button class="text-link" (click)="showForm = !showForm">{{ showForm ? '关闭' : '新增账号' }}</button>
+    </div>
+
+    <form *ngIf="showForm" class="grid gap-3 md:grid-cols-2" (ngSubmit)="saveAccount()">
+      <label class="field">
+        <span>IMAP 地址</span>
+        <input type="text" [(ngModel)]="form.host" name="host" required />
+      </label>
+      <label class="field">
+        <span>端口</span>
+        <input type="number" [(ngModel)]="form.port" name="port" required />
+      </label>
+      <label class="field">
+        <span>用户名</span>
+        <input type="text" [(ngModel)]="form.username" name="username" required />
+      </label>
+      <label class="field">
+        <span>密码</span>
+        <input type="password" [(ngModel)]="form.password" name="password" required autocomplete="current-password" />
+      </label>
+      <label class="field inline">
+        <input type="checkbox" [(ngModel)]="form.useSsl" name="useSsl" />
+        <span>使用 SSL</span>
+      </label>
+      <label class="field inline">
+        <input type="checkbox" [(ngModel)]="form.useStartTls" name="useStartTls" />
+        <span>使用 STARTTLS</span>
+      </label>
+      <div class="actions">
+        <button type="submit" class="btn" [disabled]="saving">保存</button>
+      </div>
+    </form>
+
+    <div *ngIf="accounts.length" class="account-list">
+      <div *ngFor="let acc of accounts" class="account-row">
+        <div>
+          <div class="name">
+            {{ acc.username }} &#64; {{ acc.host }}:{{ acc.port }}
+            <span class="muted" *ngIf="acc.useSsl">(SSL)</span><span class="muted" *ngIf="acc.useStartTls">(STARTTLS)</span>
+          </div>
+          <div class="muted text-xs">{{ acc.createdAt | date: 'yyyy-MM-dd HH:mm' }}</div>
+        </div>
+        <button class="text-link" (click)="loadMessages(acc.id)" [disabled]="loading">同步并查看</button>
+      </div>
+    </div>
+    <div *ngIf="!accounts.length" class="muted">还没有 IMAP 账号，先添加一个吧。</div>
+  </div>
+</section>

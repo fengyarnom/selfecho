@@ -5,20 +5,20 @@
       <span class="sep">/</span>
       <a routerLink="/admin/posts" class="link">Admin</a>
       <span class="sep">/</span>
-      <div class="crumb-dropdown" (mouseenter)="showMenu=true" (mouseleave)="showMenu=false">
-        <a routerLink="/admin/posts" class="link inline-flex items-center gap-1">
-          Posts <span class="text-xs">▾</span>
-        </a>
-        <div class="menu" *ngIf="showMenu">
-          <a class="menu-item" routerLink="/admin/posts">Posts</a>
-          <a class="menu-item" routerLink="/admin/archive">Archives</a>
-          <a class="menu-item" routerLink="/admin">Emails</a>
-          <a class="menu-item" routerLink="/admin">Memos</a>
-          <a class="menu-item" routerLink="/admin/health">Health</a>
-        </div>
-      </div>
-    </nav>
-    <a routerLink="/admin/new" class="link font-semibold text-[#3273dc]">New Post</a>
+          <div class="crumb-dropdown" (mouseenter)="showMenu=true" (mouseleave)="showMenu=false">
+            <a routerLink="/admin/posts" class="link inline-flex items-center gap-1">
+              Posts <span class="text-xs">▾</span>
+            </a>
+            <div class="menu" *ngIf="showMenu">
+              <a class="menu-item" routerLink="/admin/posts">Posts</a>
+              <a class="menu-item" routerLink="/admin/archive">Archives</a>
+              <a class="menu-item" routerLink="/admin/email">Email</a>
+              <a class="menu-item" routerLink="/admin">Memos</a>
+              <a class="menu-item" routerLink="/admin/health">Health</a>
+            </div>
+          </div>
+        </nav>
+        <a routerLink="/admin/new" class="link font-semibold text-[#3273dc]">New Post</a>
   </div>
 
   <div *ngIf="loading" class="muted">加载中...</div>

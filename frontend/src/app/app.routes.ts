@@ -8,6 +8,7 @@ import { AdminArchiveComponent } from './admin-archive/admin-archive.component';
 import { AdminHealthComponent } from './admin-health/admin-health.component';
 import { LoginComponent } from './login/login.component';
 import { authGuard } from './auth.guard';
+import { AdminEmailComponent } from './admin-email/admin-email.component';
 
 export const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -17,6 +18,7 @@ export const routes: Routes = [
   { path: 'admin', redirectTo: 'admin/posts', pathMatch: 'full' },
   { path: 'admin/posts', component: AdminComponent, canActivate: [authGuard] },
   { path: 'admin/archive', component: AdminArchiveComponent, canActivate: [authGuard] },
+  { path: 'admin/email', component: AdminEmailComponent, canActivate: [authGuard] },
   { path: 'admin/health', component: AdminHealthComponent, canActivate: [authGuard] },
   { path: 'admin/new', component: AdminFormComponent, canActivate: [authGuard] },
   { path: 'admin/edit/:id', component: AdminFormComponent, canActivate: [authGuard] }

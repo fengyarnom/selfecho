@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -273,7 +273,7 @@ func makeSlug(title, provided string) (string, error) {
 	return s, nil
 }
 
-func main() {
+func Run() error {
 	cfgPath := os.Getenv("CONFIG_PATH")
 	if cfgPath == "" {
 		// Prefer local config.yaml next to the binary, then parent (for dev)
@@ -288,11 +288,11 @@ func main() {
 
 	cfg, err := loadConfig(cfgPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	db, err := ensureDB(context.Background(), cfg.Database)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer db.Close()
 
@@ -318,13 +318,13 @@ func main() {
 	s := &server{db: db, cache: newListCache(30 * time.Second), startedAt: time.Now(), imapKey: deriveKey(secret)}
 
 	if err := s.ensureAuthSchema(context.Background()); err != nil {
-		panic(err)
+		return err
 	}
 	if err := s.ensureInitialAdmin(context.Background()); err != nil {
-		panic(err)
+		return err
 	}
 	if err := s.ensureImapSchema(context.Background()); err != nil {
-		panic(err)
+		return err
 	}
 
 	router.GET("/api/hello", func(c *gin.Context) {
@@ -381,7 +381,10 @@ func main() {
 
 	serveSPA(router, cfg.StaticDir)
 
-	router.Run(fmt.Sprintf(":%d", cfg.Port))
+	if err := router.Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
+		return err
+	}
+	return nil
 }
 
 type archive struct {

@@ -9,10 +9,14 @@ import { AdminHealthComponent } from './admin-health/admin-health.component';
 import { LoginComponent } from './login/login.component';
 import { authGuard } from './auth.guard';
 import { AdminEmailComponent } from './admin-email/admin-email.component';
+import { MemoListComponent } from './memo-list/memo-list.component';
+import { PostDetailComponent } from './post-detail/post-detail.component';
 
 export const routes: Routes = [
   { path: '', component: HomeComponent },
+  { path: 'post/:slug', component: PostDetailComponent },
   { path: 'archive', component: ArchiveComponent },
+  { path: 'memos', component: MemoListComponent },
   { path: 'categories', component: CategoriesComponent },
   { path: 'login', component: LoginComponent },
   { path: 'admin', redirectTo: 'admin/posts', pathMatch: 'full' },

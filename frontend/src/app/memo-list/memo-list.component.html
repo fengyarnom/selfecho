@@ -1,0 +1,26 @@
+<section class="memo-page py-6 space-y-4">
+  <div *ngIf="loading" class="muted">加载中...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+  <div *ngIf="!loading && !error && memos.length === 0" class="muted">暂无备忘录</div>
+
+  <div class="memo-grid" *ngIf="!loading && !error && memos.length">
+    <article *ngFor="let memo of memos; let i = index" class="memo-card">
+      <div class="memo-head grid grid-cols-7 text-sm">
+        <div class="memo-id">#{{ memoIndex(i) }}</div>
+        <div class="memo-date col-span-2 col-start-6">
+          <time class="memo-time">{{ relativeTime(memo.createdAt) }}</time>
+        </div>
+      </div>
+      <div class="memo-body">
+        {{ memo.bodyMd || '(空)' }}
+      </div>
+      <div class="memo-footer text-xs text-slate-500">#{{ memo.archive || '未分类' }}</div>
+    </article>
+  </div>
+
+  <div class="pager" *ngIf="totalPages > 1">
+    <button class="pager-btn" (click)="prevPage()" [disabled]="page === 1 || loading">上一页</button>
+    <span class="pager-info">第 {{ page }} / {{ totalPages }} 页</span>
+    <button class="pager-btn" (click)="nextPage()" [disabled]="page >= totalPages || loading">下一页</button>
+  </div>
+</section>

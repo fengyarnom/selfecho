@@ -8,12 +8,14 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { API_BASE } from '../api.config';
 
 type Status = 'draft' | 'published';
+type ArticleType = 'post' | 'memo';
 
 interface ArticlePayload {
   title: string;
   slug: string;
   archive: string;
   status: Status;
+  type: ArticleType;
   bodyMd: string;
 }
 
@@ -29,7 +31,7 @@ interface Article extends ArticlePayload {
   styleUrls: ['./admin-form.component.css']
 })
 export class AdminFormComponent implements OnInit {
-  form: ArticlePayload = { title: '', slug: '', archive: '', status: 'draft', bodyMd: '' };
+  form: ArticlePayload = { title: '', slug: '', archive: '', status: 'draft', type: 'post', bodyMd: '' };
   editingId: string | null = null;
   error = '';
   saving = false;
@@ -65,6 +67,7 @@ export class AdminFormComponent implements OnInit {
           slug: found.slug,
           archive: found.archive || '',
           status: found.status,
+          type: (found as any).type || 'post',
           bodyMd: found.bodyMd || ''
         };
       },

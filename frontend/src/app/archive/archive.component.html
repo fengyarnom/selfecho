@@ -9,8 +9,10 @@
   <div *ngIf="!loading && error" class="text-sm text-red-600">{{ error }}</div>
   <div *ngIf="!loading && !error && articles.length === 0" class="text-sm text-slate-500">暂无归档</div>
 
-  <div *ngFor="let article of articles" class="pb-6">
-    <div class="text-[1.4rem] font-bold text-[#3273dc] tracking-[0.09375em]">{{ article.title }}</div>
-    <div class="mt-2 text-xs text-[#aaa]">{{ article.createdAt | date: 'yyyy-MM-dd HH:mm' }}</div>
+  <div *ngFor="let article of articles" class="pb-6 space-y-1">
+    <div class="text-[1.4rem] font-bold tracking-[0.09375em]">
+      <a [routerLink]="['/post', article.slug]" class="text-[#3273dc] no-underline">{{ article.title }}</a>
+    </div>
+    <div class="mt-1 text-xs text-[#aaa]">{{ article.createdAt | date: 'yyyy-MM-dd HH:mm' }}</div>
   </div>
 </section>

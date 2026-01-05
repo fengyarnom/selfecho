@@ -1,4 +1,4 @@
-<section class="admin-page mx-auto max-w-5xl px-6 py-6 space-y-4 sm:px-9 md:px-12 lg:px-[10rem]">
+<section class="admin-page py-6 space-y-4">
   <div class="flex items-center justify-between text-sm text-slate-600">
     <nav class="breadcrumbs">
       <a routerLink="/" class="link">Home</a>
@@ -16,20 +16,27 @@
               <a class="menu-item" routerLink="/admin">Memos</a>
               <a class="menu-item" routerLink="/admin/health">Health</a>
             </div>
-          </div>
-        </nav>
-        <a routerLink="/admin/new" class="link font-semibold text-[#3273dc]">New Post</a>
+      </div>
+    </nav>
+    <div class="flex items-center gap-3">
+      <select class="filter-select" [(ngModel)]="filterType" (change)="page = 1; loadArticles()">
+        <option value="all">全部类型</option>
+            <option value="post">文章</option>
+            <option value="memo">备忘录</option>
+          </select>
+          <a routerLink="/admin/new" class="link font-semibold text-[#3273dc]">New Post</a>
+        </div>
   </div>
 
   <div *ngIf="loading" class="muted">加载中...</div>
   <div *ngIf="!loading">
     <table class="admin-table">
       <colgroup>
-        <col style="width: 40%" />
-        <col style="width: 20%" />
-        <col style="width: 15%" />
-        <col style="width: 10%" />
-        <col style="width: 15%" />
+        <col style="width: 32%" />
+        <col style="width: 22%" />
+        <col style="width: 16%" />
+        <col style="width: 12%" />
+        <col style="width: 18%" />
       </colgroup>
       <thead>
         <tr>

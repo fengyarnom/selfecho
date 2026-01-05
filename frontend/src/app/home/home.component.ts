@@ -5,11 +5,12 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { marked } from 'marked';
 import { API_BASE } from '../api.config';
 import * as katex from 'katex';
+import { RouterModule } from '@angular/router';
 
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css']
 })
@@ -51,7 +52,7 @@ export class HomeComponent implements OnInit {
     this.error = '';
     this.http
       .get<ArticlePayload[]>(`${API_BASE}/articles`, {
-        params: { page: this.page, limit: this.limit, status: 'published' },
+        params: { page: this.page, limit: this.limit, status: 'published', type: 'post' },
         observe: 'response'
       })
       .subscribe({
@@ -62,7 +63,9 @@ export class HomeComponent implements OnInit {
           this.fullArticles = data.map((item) => ({
             id: item.id,
             title: item.title,
+            slug: item.slug,
             createdAt: item.createdAt,
+            archive: item.archive || '',
             body: this.toHtml(item.bodyMd, item.bodyHtml)
           }));
           this.stageArticles();
@@ -160,7 +163,9 @@ export class HomeComponent implements OnInit {
 interface ArticlePayload {
   id: string;
   title: string;
+  slug: string;
   createdAt: string;
+  archive?: string;
   bodyMd: string;
   bodyHtml?: string;
 }
@@ -168,6 +173,8 @@ interface ArticlePayload {
 interface ArticleView {
   id: string;
   title: string;
+  slug: string;
   createdAt: string;
+  archive?: string;
   body: SafeHtml;
 }

@@ -1,0 +1,39 @@
+.post-meta {
+  border-left: 12px solid #ff7e79;
+  margin: 1em 0 2em;
+  padding-left: 1.5em;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35em;
+}
+
+.post-title,
+.post-time {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.category-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.category-link:hover {
+  color: #3c546c;
+  text-decoration: none;
+}
+
+.article-body img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.article-body pre {
+  overflow: auto;
+}

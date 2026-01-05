@@ -1,0 +1,127 @@
+.memo-page {
+  display: block;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.breadcrumbs .sep {
+  color: #9ca3af;
+}
+
+.crumb-leaf {
+  color: #111827;
+  font-weight: 600;
+}
+
+.muted {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.error {
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.memo-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 4em;
+}
+
+.memo-card {
+  border-bottom: 2px dashed #eee;
+  padding: 16px 0;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.memo-head {
+  color: #1f2937;
+}
+
+.memo-id {
+  font-weight: 700;
+}
+
+.memo-title-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.memo-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  word-break: break-word;
+}
+
+.memo-date {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.memo-time {
+  font-style: italic;
+  color: #9a7b2f;
+  opacity: 0.8;
+}
+
+.memo-snippet {
+  margin: 0;
+  font-size: 13px;
+  color: #1f2937;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.memo-body {
+  margin: 0;
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.6;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.pager-btn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pager-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.pager-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pager-info {
+  color: #6b7280;
+  font-size: 13px;
+}

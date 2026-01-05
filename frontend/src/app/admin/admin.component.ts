@@ -1,13 +1,16 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { API_BASE } from '../api.config';
 
 type Status = 'draft' | 'published';
+type ArticleType = 'post' | 'memo';
 
 interface Article {
   id: string;
+  type: ArticleType;
   title: string;
   slug: string;
   archive?: string;
@@ -19,7 +22,7 @@ interface Article {
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [CommonModule, RouterLink, HttpClientModule],
+  imports: [CommonModule, FormsModule, RouterLink, HttpClientModule],
   templateUrl: './admin.component.html',
   styleUrls: ['./admin.component.css']
 })
@@ -32,6 +35,7 @@ export class AdminComponent implements OnInit {
   page = 1;
   limit = 10;
   total = 0;
+  filterType: ArticleType | 'all' = 'all';
 
   constructor(private http: HttpClient) {}
 
@@ -65,6 +69,7 @@ export class AdminComponent implements OnInit {
         params: {
           page: this.page,
           limit: this.limit,
+          type: this.filterType === 'all' ? '' : this.filterType,
           compact: '1'
         }
       })

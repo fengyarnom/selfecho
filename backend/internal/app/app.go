@@ -100,6 +100,7 @@ type imapMessage struct {
 
 type article struct {
 	ID          string     `json:"id"`
+	Type        string     `json:"type"`
 	Title       string     `json:"title"`
 	Slug        string     `json:"slug"`
 	Archive     string     `json:"archive,omitempty"`
@@ -326,6 +327,9 @@ func Run() error {
 	if err := s.ensureImapSchema(context.Background()); err != nil {
 		return err
 	}
+	if err := s.ensureArticleSchema(context.Background()); err != nil {
+		return err
+	}
 
 	router.GET("/api/hello", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "hello from backend"})
@@ -425,14 +429,14 @@ func newListCache(ttl time.Duration) *listCache {
 	}
 }
 
-func (c *listCache) key(status, archive string, page, limit int, compact bool) string {
-	return fmt.Sprintf("s=%s|a=%s|p=%d|l=%d|c=%t", status, archive, page, limit, compact)
+func (c *listCache) key(status, archive, typ, slug string, page, limit int, compact bool) string {
+	return fmt.Sprintf("s=%s|a=%s|t=%s|slug=%s|p=%d|l=%d|c=%t", status, archive, typ, slug, page, limit, compact)
 }
 
-func (c *listCache) get(status, archive string, page, limit int, compact bool) (cachedList, bool) {
+func (c *listCache) get(status, archive, typ, slug string, page, limit int, compact bool) (cachedList, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	ck := c.key(status, archive, page, limit, compact)
+	ck := c.key(status, archive, typ, slug, page, limit, compact)
 	val, ok := c.data[ck]
 	if !ok || time.Since(val.cachedAt) > c.ttl {
 		c.misses++
@@ -442,10 +446,10 @@ func (c *listCache) get(status, archive string, page, limit int, compact bool) (
 	return val, true
 }
 
-func (c *listCache) set(status, archive string, page, limit int, compact bool, items []article, total int) {
+func (c *listCache) set(status, archive, typ, slug string, page, limit int, compact bool, items []article, total int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	ck := c.key(status, archive, page, limit, compact)
+	ck := c.key(status, archive, typ, slug, page, limit, compact)
 	c.data[ck] = cachedList{
 		items:    items,
 		total:    total,
@@ -682,6 +686,14 @@ func (s *server) ensureImapSchema(ctx context.Context) error {
 	return err
 }
 
+func (s *server) ensureArticleSchema(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `
+		ALTER TABLE articles ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'post';
+		CREATE INDEX IF NOT EXISTS idx_articles_type_status ON articles(type, status);
+	`)
+	return err
+}
+
 type sessionWithUser struct {
 	SessionID string
 	User      user
@@ -859,7 +871,7 @@ func (s *server) listCategories(c *gin.Context) {
 		SELECT COALESCE(ar.name, '未分类') AS name, COUNT(*) AS count
 		FROM articles art
 		LEFT JOIN archives ar ON ar.id = art.archive_id
-		WHERE art.status = 'published'
+		WHERE art.status = 'published' AND art.type = 'post'
 		GROUP BY COALESCE(ar.name, '未分类')
 		ORDER BY count DESC, name ASC`)
 	if err != nil {
@@ -887,13 +899,23 @@ func (s *server) listArticles(c *gin.Context) {
 	usePaging := pageStr != "" || limitStr != ""
 	statusFilter := strings.TrimSpace(c.Query("status"))
 	archiveFilter := strings.TrimSpace(c.Query("archive"))
+	typeFilter := strings.TrimSpace(c.Query("type"))
 	compact := c.Query("compact") == "1" || strings.EqualFold(c.Query("fields"), "compact")
+	slugFilter := strings.TrimSpace(c.Query("slug"))
 
 	// 未指定 status 或请求非 published 的数据时，需要鉴权
 	if statusFilter == "" || statusFilter != "published" {
 		if _, ok := s.ensureUser(c); !ok {
 			return
 		}
+	}
+
+	if typeFilter == "" && statusFilter == "published" {
+		typeFilter = "post"
+	}
+	if typeFilter != "" && typeFilter != "post" && typeFilter != "memo" && typeFilter != "all" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "type 只能是 post 或 memo"})
+		return
 	}
 
 	page := 1
@@ -918,9 +940,19 @@ func (s *server) listArticles(c *gin.Context) {
 		args = append(args, statusFilter)
 		argPos++
 	}
+	if slugFilter != "" {
+		whereParts = append(whereParts, fmt.Sprintf("art.slug = $%d", argPos))
+		args = append(args, slugFilter)
+		argPos++
+	}
 	if archiveFilter != "" {
 		whereParts = append(whereParts, fmt.Sprintf("COALESCE(ar.name, '') = $%d", argPos))
 		args = append(args, archiveFilter)
+		argPos++
+	}
+	if typeFilter != "" && typeFilter != "all" {
+		whereParts = append(whereParts, fmt.Sprintf("art.type = $%d", argPos))
+		args = append(args, typeFilter)
 		argPos++
 	}
 	whereSQL := ""
@@ -928,7 +960,7 @@ func (s *server) listArticles(c *gin.Context) {
 		whereSQL = "WHERE " + strings.Join(whereParts, " AND ")
 	}
 
-	if cached, ok := s.cache.get(statusFilter, archiveFilter, page, limit, compact); ok {
+	if cached, ok := s.cache.get(statusFilter, archiveFilter, typeFilter, slugFilter, page, limit, compact); ok {
 		if usePaging {
 			c.Header("X-Total-Count", strconv.Itoa(cached.total))
 			c.Header("X-Page", strconv.Itoa(page))
@@ -956,7 +988,7 @@ func (s *server) listArticles(c *gin.Context) {
 	if usePaging {
 		offset := (page - 1) * limit
 		query := fmt.Sprintf(`
-			SELECT art.id, art.title, art.slug, COALESCE(ar.name, '') AS archive, art.status, %s,
+			SELECT art.id, art.type, art.title, art.slug, COALESCE(ar.name, '') AS archive, art.status, %s,
 			       art.published_at, art.created_at, art.updated_at
 			FROM articles art
 			LEFT JOIN archives ar ON ar.id = art.archive_id
@@ -967,7 +999,7 @@ func (s *server) listArticles(c *gin.Context) {
 		rows, err = s.db.QueryContext(ctx, query, argsWithPage...)
 	} else {
 		query := fmt.Sprintf(`
-			SELECT art.id, art.title, art.slug, COALESCE(ar.name, '') AS archive, art.status, %s,
+			SELECT art.id, art.type, art.title, art.slug, COALESCE(ar.name, '') AS archive, art.status, %s,
 			       art.published_at, art.created_at, art.updated_at
 			FROM articles art
 			LEFT JOIN archives ar ON ar.id = art.archive_id
@@ -986,7 +1018,7 @@ func (s *server) listArticles(c *gin.Context) {
 		var a article
 		var archiveName sql.NullString
 		var publishedAt sql.NullTime
-		if err := rows.Scan(&a.ID, &a.Title, &a.Slug, &archiveName, &a.Status, &a.BodyMD, &a.BodyHTML, &publishedAt, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Type, &a.Title, &a.Slug, &archiveName, &a.Status, &a.BodyMD, &a.BodyHTML, &publishedAt, &a.CreatedAt, &a.UpdatedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "解析文章数据失败"})
 			return
 		}
@@ -1002,9 +1034,9 @@ func (s *server) listArticles(c *gin.Context) {
 		c.Header("X-Total-Count", strconv.Itoa(total))
 		c.Header("X-Page", strconv.Itoa(page))
 		c.Header("X-Limit", strconv.Itoa(limit))
-		s.cache.set(statusFilter, archiveFilter, page, limit, compact, result, total)
+		s.cache.set(statusFilter, archiveFilter, typeFilter, slugFilter, page, limit, compact, result, total)
 	} else {
-		s.cache.set(statusFilter, archiveFilter, page, limit, compact, result, len(result))
+		s.cache.set(statusFilter, archiveFilter, typeFilter, slugFilter, page, limit, compact, result, len(result))
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -1014,6 +1046,7 @@ type articlePayload struct {
 	Slug    string `json:"slug"`
 	Archive string `json:"archive"`
 	Status  string `json:"status"`
+	Type    string `json:"type"`
 	BodyMD  string `json:"bodyMd"`
 }
 
@@ -1023,6 +1056,9 @@ func (s *server) createArticle(c *gin.Context) {
 	if err := c.BindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体格式错误"})
 		return
+	}
+	if payload.Type == "" {
+		payload.Type = "post"
 	}
 	if err := validatePayload(payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1055,9 +1091,9 @@ func (s *server) createArticle(c *gin.Context) {
 	var createdID string
 	err = s.db.QueryRowContext(
 		ctx,
-		`INSERT INTO articles (slug, title, body_md, body_html, status, archive_id, published_at) 
-		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-		slug, payload.Title, payload.BodyMD, bodyHTML, payload.Status, archiveID, publishedAt,
+		`INSERT INTO articles (slug, title, body_md, body_html, status, archive_id, published_at, type) 
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		slug, payload.Title, payload.BodyMD, bodyHTML, payload.Status, archiveID, publishedAt, payload.Type,
 	).Scan(&createdID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("创建文章失败: %v", err)})
@@ -1075,6 +1111,9 @@ func (s *server) updateArticle(c *gin.Context) {
 	if err := c.BindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体格式错误"})
 		return
+	}
+	if payload.Type == "" {
+		payload.Type = "post"
 	}
 	if err := validatePayload(payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1107,9 +1146,9 @@ func (s *server) updateArticle(c *gin.Context) {
 	res, err := s.db.ExecContext(
 		ctx,
 		`UPDATE articles 
-		 SET title=$1, slug=$2, body_md=$3, body_html=$4, status=$5, archive_id=$6, published_at=$7, updated_at=now()
-		 WHERE id=$8`,
-		payload.Title, slug, payload.BodyMD, bodyHTML, payload.Status, archiveID, publishedAt, id,
+		 SET title=$1, slug=$2, body_md=$3, body_html=$4, status=$5, archive_id=$6, published_at=$7, type=$8, updated_at=now()
+		 WHERE id=$9`,
+		payload.Title, slug, payload.BodyMD, bodyHTML, payload.Status, archiveID, publishedAt, payload.Type, id,
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("更新文章失败: %v", err)})
@@ -1879,6 +1918,12 @@ func validatePayload(p articlePayload) error {
 	}
 	if p.Status != "draft" && p.Status != "published" {
 		return errors.New("status 只能是 draft 或 published")
+	}
+	if p.Type == "" {
+		p.Type = "post"
+	}
+	if p.Type != "post" && p.Type != "memo" {
+		return errors.New("type 只能是 post 或 memo")
 	}
 	return nil
 }

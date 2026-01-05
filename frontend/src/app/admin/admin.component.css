@@ -86,12 +86,21 @@ section.admin-page {
   font-size: 14px;
 }
 
+.admin-table td {
+  font-size: 13px;
+}
+
+.admin-table td:first-child {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .admin-table th:nth-child(2),
 .admin-table th:nth-child(3),
-.admin-table th:nth-child(4),
 .admin-table td:nth-child(2),
-.admin-table td:nth-child(3),
-.admin-table td:nth-child(4) {
+.admin-table td:nth-child(3) {
   text-align: center;
 }
 
@@ -188,6 +197,19 @@ section.admin-page {
 .pager-info {
   color: #6b7280;
   font-size: 13px;
+}
+
+.filter-select {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.inline-pill {
+  display: inline-block;
+  margin-top: 2px;
 }
 
 @media (max-width: 720px) {

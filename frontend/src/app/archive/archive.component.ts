@@ -1,12 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { API_BASE } from '../api.config';
 
 interface ArticlePayload {
   id: string;
   title: string;
+  slug: string;
   createdAt: string;
   status: string;
   archive?: string;
@@ -15,7 +16,7 @@ interface ArticlePayload {
 @Component({
   selector: 'app-archive',
   standalone: true,
-  imports: [CommonModule, HttpClientModule],
+  imports: [CommonModule, HttpClientModule, RouterModule],
   templateUrl: './archive.component.html',
   styleUrls: ['./archive.component.css']
 })
@@ -44,6 +45,7 @@ export class ArchiveComponent implements OnInit {
         params: {
           archive: this.selectedArchive || '',
           status: 'published',
+          type: 'post',
           compact: '1'
         }
       })

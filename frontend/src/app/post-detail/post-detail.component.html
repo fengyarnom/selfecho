@@ -1,0 +1,25 @@
+<section class="space-y-5 py-6">
+  <div *ngIf="loading" class="text-sm text-slate-600">加载中...</div>
+  <div *ngIf="!loading && error" class="text-sm text-red-600">{{ error }}</div>
+
+  <article *ngIf="!loading && !error && article" class="space-y-3">
+    <header class="post-meta">
+      <h1 class="post-title text-[2rem] font-semibold text-[#3d3d3f] py-[4em]">{{ article.title }}</h1>
+      <p class="post-time text-xs text-[#aaa]">发布时间：{{ article.createdAt | date: 'yyyy-MM-dd HH:mm' }}</p>
+      <p class="post-time text-xs text-[#aaa]">
+        分类：
+        <a
+          [routerLink]="['/archive']"
+          [queryParams]="{ archive: article.archive || '未分类' }"
+          class="category-link"
+        >
+          {{ article.archive || '未分类' }}
+        </a>
+      </p>
+    </header>
+    <div class="article-body space-y-3 text-[16px] leading-8 text-[#3d3d3f] tracking-[0.0625em]" [innerHTML]="article.body"></div>
+    <div class="pt-2">
+      <a routerLink="/" class="text-sm text-[#3c546c] hover:underline">← 返回首页</a>
+    </div>
+  </article>
+</section>

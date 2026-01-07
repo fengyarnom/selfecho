@@ -380,3 +380,26 @@
 .crumb-leaf {
   color: #111827;
 }
+
+.live-check {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.live-meta {
+  font-size: 13px;
+}
+
+.subject-list {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  color: #111827;
+}
+
+.subject-list li {
+  margin-bottom: 4px;
+  line-height: 1.4;
+}

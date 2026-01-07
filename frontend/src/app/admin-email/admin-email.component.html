@@ -9,13 +9,13 @@
         <a routerLink="/admin/email" class="link inline-flex items-center gap-1">
           Email <span class="text-xs">▾</span>
         </a>
-        <div class="menu" *ngIf="showMenu">
-          <a class="menu-item" routerLink="/admin/posts">Posts</a>
-          <a class="menu-item" routerLink="/admin/archive">Archives</a>
-          <a class="menu-item" routerLink="/admin/email">Email</a>
-          <a class="menu-item" routerLink="/admin">Memos</a>
-          <a class="menu-item" routerLink="/admin/health">Health</a>
-        </div>
+            <div class="menu" *ngIf="showMenu">
+              <a class="menu-item" routerLink="/admin/posts">Posts</a>
+              <a class="menu-item" routerLink="/admin/archive">Archives</a>
+              <a class="menu-item" routerLink="/admin/email">Email</a>
+              <a class="menu-item" routerLink="/admin">Memos</a>
+              <a class="menu-item" routerLink="/admin/health">Health</a>
+            </div>
       </div>
       <ng-container *ngIf="view === 'imap'">
         <span class="sep">/</span>
@@ -43,7 +43,9 @@
         </div>
       </div>
       <div class="inline-actions">
-        <button class="text-link" (click)="loadMessages()" [disabled]="loading">刷新</button>
+        <button class="text-link" (click)="loadMessages(undefined, true)" [disabled]="loading">同步刷新</button>
+        <button class="text-link" (click)="checkLiveFetch()" [disabled]="diagnoseLoading">即时拉取</button>
+        <button class="text-link" (click)="rebuildCache()" [disabled]="rebuildLoading">重建缓存</button>
       </div>
     </div>
 
@@ -53,7 +55,7 @@
         *ngFor="let acc of accounts"
         class="pill-btn"
         [class.active]="selectedAccountId === acc.id"
-        (click)="loadMessages(acc.id)"
+        (click)="loadMessages(acc.id, true)"
         [disabled]="loading"
       >
         {{ acc.username }}&#64;{{ acc.host }}
@@ -61,6 +63,18 @@
     </div>
 
     <div *ngIf="error" class="error">{{ error }}</div>
+    <div *ngIf="diagnoseLoading" class="muted">即时拉取中...</div>
+    <div *ngIf="diagnoseError" class="error">{{ diagnoseError }}</div>
+    <div *ngIf="rebuildLoading" class="muted">重建缓存中...</div>
+    <div *ngIf="rebuildError" class="error">{{ rebuildError }}</div>
+    <div *ngIf="!diagnoseLoading && diagnoseSubjects.length" class="live-check">
+      <div class="muted live-meta">
+        实时拉取 {{ diagnoseSubjects.length }} 封（{{ diagnoseAccount }}&#64;{{ diagnoseHost }}）
+      </div>
+      <ul class="subject-list">
+        <li *ngFor="let s of diagnoseSubjects">{{ s || '(无主题)' }}</li>
+      </ul>
+    </div>
     <div *ngIf="loading" class="muted">加载中...</div>
     <div *ngIf="!loading && messages.length === 0" class="muted">暂无邮件</div>
 
@@ -156,7 +170,7 @@
           </div>
           <div class="muted text-xs">{{ acc.createdAt | date: 'yyyy-MM-dd HH:mm' }}</div>
         </div>
-        <button class="text-link" (click)="loadMessages(acc.id)" [disabled]="loading">同步并查看</button>
+        <button class="text-link" (click)="loadMessages(acc.id, true)" [disabled]="loading">同步并查看</button>
       </div>
     </div>
     <div *ngIf="!accounts.length" class="muted">还没有 IMAP 账号，先添加一个吧。</div>

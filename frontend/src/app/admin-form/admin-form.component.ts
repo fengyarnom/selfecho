@@ -35,6 +35,8 @@ export class AdminFormComponent implements OnInit {
   editingId: string | null = null;
   error = '';
   saving = false;
+  slugGenerating = false;
+  slugMessage = '';
   archives: string[] = [];
   selectedArchive = '';
 
@@ -131,5 +133,32 @@ export class AdminFormComponent implements OnInit {
       return;
     }
     this.form.archive = val;
+  }
+
+  generateSlug(mode: 'llm' | 'pinyin') {
+    if (!this.form.title.trim()) {
+      this.error = '请先填写标题';
+      return;
+    }
+    this.slugGenerating = true;
+    this.slugMessage = '';
+    this.error = '';
+    this.http
+      .post<{ slug: string; source: string }>(
+        `${API_BASE}/slug`,
+        { title: this.form.title, mode },
+        { withCredentials: true }
+      )
+      .subscribe({
+        next: (res) => {
+          this.form.slug = res.slug;
+          this.slugMessage = res.source === 'llm' ? '已使用 DeepSeek 生成' : '已使用拼音生成';
+          this.slugGenerating = false;
+        },
+        error: (err: any) => {
+          this.slugGenerating = false;
+          this.error = err?.error?.error || '生成 slug 失败';
+        }
+      });
   }
 }

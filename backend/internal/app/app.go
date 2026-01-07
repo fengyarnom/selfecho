@@ -1,12 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -16,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,11 +116,12 @@ type article struct {
 }
 
 type config struct {
-	Database   dbConfig   `yaml:"database"`
-	Site       siteConfig `yaml:"site"`
-	Port       int        `yaml:"port"`
-	StaticDir  string     `yaml:"staticDir"`
-	ImapSecret string     `yaml:"imapSecret"`
+	Database   dbConfig       `yaml:"database"`
+	Site       siteConfig     `yaml:"site"`
+	Port       int            `yaml:"port"`
+	StaticDir  string         `yaml:"staticDir"`
+	ImapSecret string         `yaml:"imapSecret"`
+	Deepseek   deepseekConfig `yaml:"deepseek"`
 }
 
 type dbConfig struct {
@@ -131,6 +135,12 @@ type dbConfig struct {
 
 type siteConfig struct {
 	Title string `yaml:"title" json:"title"`
+}
+
+type deepseekConfig struct {
+	APIKey  string `yaml:"apiKey"`
+	BaseURL string `yaml:"baseUrl"`
+	Model   string `yaml:"model"`
 }
 
 const (
@@ -158,14 +168,20 @@ func defaultConfig() config {
 		Port:       8080,
 		StaticDir:  "./static",
 		ImapSecret: "",
+		Deepseek: deepseekConfig{
+			BaseURL: "https://api.deepseek.com",
+			Model:   "deepseek-chat",
+		},
 	}
 }
 
 type server struct {
-	db        *sql.DB
-	cache     *listCache
-	startedAt time.Time
-	imapKey   []byte
+	db         *sql.DB
+	cache      *listCache
+	startedAt  time.Time
+	imapKey    []byte
+	deepseek   deepseekConfig
+	httpClient *http.Client
 }
 
 func (s *server) backfillBodyHTML(ctx context.Context) error {
@@ -223,6 +239,12 @@ func loadConfig(path string) (config, error) {
 	if cfg.StaticDir == "" {
 		cfg.StaticDir = defaultConfig().StaticDir
 	}
+	if cfg.Deepseek.BaseURL == "" {
+		cfg.Deepseek.BaseURL = defaultConfig().Deepseek.BaseURL
+	}
+	if cfg.Deepseek.Model == "" {
+		cfg.Deepseek.Model = defaultConfig().Deepseek.Model
+	}
 	return cfg, nil
 }
 
@@ -274,6 +296,129 @@ func makeSlug(title, provided string) (string, error) {
 	return s, nil
 }
 
+func (s *server) generateSlug(c *gin.Context) {
+	var payload struct {
+		Title string `json:"title"`
+		Mode  string `json:"mode"`
+	}
+	if err := c.BindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体格式错误"})
+		return
+	}
+	title := strings.TrimSpace(payload.Title)
+	if title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "标题不能为空"})
+		return
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(payload.Mode))
+	if mode == "" {
+		mode = "llm"
+	}
+
+	switch mode {
+	case "llm":
+		slugVal, err := s.generateSlugWithLLM(c.Request.Context(), title)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"slug": slugVal, "source": "llm"})
+	case "pinyin":
+		slugVal, err := makeSlug(title, "")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"slug": slugVal, "source": "pinyin"})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "mode 仅支持 llm 或 pinyin"})
+	}
+}
+
+func (s *server) generateSlugWithLLM(ctx context.Context, title string) (string, error) {
+	if s.deepseek.APIKey == "" {
+		return "", errors.New("未配置 DeepSeek API 密钥")
+	}
+	baseURL := strings.TrimSuffix(strings.TrimSpace(s.deepseek.BaseURL), "/")
+	if baseURL == "" {
+		baseURL = defaultConfig().Deepseek.BaseURL
+	}
+	model := strings.TrimSpace(s.deepseek.Model)
+	if model == "" {
+		model = defaultConfig().Deepseek.Model
+	}
+
+	payload := map[string]any{
+		"model": model,
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "将我下面给你的中文标题转换为SEO友好的英文slug格式。输出要求：全小写、用连字符连接、简洁明了。仅输出slug本身。",
+			},
+			{
+				"role":    "user",
+				"content": title,
+			},
+		},
+		"stream": false,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.deepseek.APIKey)
+
+	client := s.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("调用 DeepSeek 失败(%d): %s", resp.StatusCode, strings.TrimSpace(string(snippet)))
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("解析 DeepSeek 响应失败: %w", err)
+	}
+	if len(result.Choices) == 0 {
+		return "", errors.New("DeepSeek 返回为空")
+	}
+	content := strings.TrimSpace(result.Choices[0].Message.Content)
+	content = strings.Trim(content, "\"`' ")
+	content = strings.ReplaceAll(content, "\n", " ")
+
+	slugified := slug.Make(content)
+	if slugified == "" {
+		slugified = slug.MakeLang(content, "zh")
+	}
+	if slugified == "" {
+		return "", errors.New("DeepSeek 返回的内容无法转换为 slug")
+	}
+	return slugified, nil
+}
+
 func Run() error {
 	cfgPath := os.Getenv("CONFIG_PATH")
 	if cfgPath == "" {
@@ -316,7 +461,19 @@ func Run() error {
 		secret = env
 	}
 
-	s := &server{db: db, cache: newListCache(30 * time.Second), startedAt: time.Now(), imapKey: deriveKey(secret)}
+	deepseekCfg := cfg.Deepseek
+	if env := os.Getenv("DEEPSEEK_API_KEY"); env != "" {
+		deepseekCfg.APIKey = env
+	}
+
+	s := &server{
+		db:         db,
+		cache:      newListCache(30 * time.Second),
+		startedAt:  time.Now(),
+		imapKey:    deriveKey(secret),
+		deepseek:   deepseekCfg,
+		httpClient: &http.Client{Timeout: 15 * time.Second},
+	}
 
 	if err := s.ensureAuthSchema(context.Background()); err != nil {
 		return err
@@ -377,6 +534,9 @@ func Run() error {
 		protected.PUT("/archives/:id", s.updateArchive)
 		protected.DELETE("/archives/:id", s.deleteArchive)
 		protected.POST("/imap/accounts", s.createImapAccount)
+		protected.GET("/imap/diagnose", s.diagnoseImapFetch)
+		protected.POST("/imap/rebuild", s.rebuildImapCache)
+		protected.POST("/slug", s.generateSlug)
 	}
 
 	if err := s.backfillBodyHTML(context.Background()); err != nil {
@@ -1379,6 +1539,82 @@ func (s *server) createImapAccount(c *gin.Context) {
 	c.Status(http.StatusCreated)
 }
 
+func (s *server) diagnoseImapFetch(c *gin.Context) {
+	ctx := c.Request.Context()
+	accountID := strings.TrimSpace(c.Query("accountId"))
+	limit := 10
+	if l, err := strconv.Atoi(strings.TrimSpace(c.Query("limit"))); err == nil && l > 0 && l <= 50 {
+		limit = l
+	}
+
+	acc, err := s.pickImapAccount(ctx, accountID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if acc == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未找到 IMAP 账号，请先创建"})
+		return
+	}
+
+	msgs, err := fetchImapMessages(ctx, *acc, limit)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("即时拉取失败: %v", err)})
+		return
+	}
+
+	var subjects []string
+	for _, m := range msgs {
+		subjects = append(subjects, m.Subject)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"accountId": acc.ID,
+		"username":  acc.Username,
+		"host":      acc.Host,
+		"count":     len(subjects),
+		"subjects":  subjects,
+	})
+}
+
+func (s *server) rebuildImapCache(c *gin.Context) {
+	ctx := c.Request.Context()
+	accountID := strings.TrimSpace(c.Query("accountId"))
+	limit := 100
+	if l, err := strconv.Atoi(strings.TrimSpace(c.Query("limit"))); err == nil && l > 0 && l <= 500 {
+		limit = l
+	}
+
+	acc, err := s.pickImapAccount(ctx, accountID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if acc == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未找到 IMAP 账号，请先创建"})
+		return
+	}
+
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM imap_messages WHERE account_id=$1`, acc.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("清理缓存失败: %v", err)})
+		return
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE imap_accounts SET last_uid=$1, last_uidvalidity=$2 WHERE id=$3`, 0, 0, acc.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("重置账号状态失败: %v", err)})
+		return
+	}
+	acc.LastUID = 0
+	acc.LastUIDValidity = 0
+
+	if err := s.syncImapAccount(ctx, acc, limit, true); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("重建失败: %v", err)})
+		return
+	}
+
+	total, _ := s.countCachedMessages(ctx, acc.ID)
+	c.JSON(http.StatusOK, gin.H{"count": total})
+}
+
 func (s *server) listImapMessages(c *gin.Context) {
 	ctx := c.Request.Context()
 	accountID := strings.TrimSpace(c.Query("accountId"))
@@ -1391,6 +1627,7 @@ func (s *server) listImapMessages(c *gin.Context) {
 		page = p
 	}
 	offset := (page - 1) * limit
+	fresh := strings.EqualFold(strings.TrimSpace(c.Query("fresh")), "true") || strings.TrimSpace(c.Query("fresh")) == "1"
 
 	acc, err := s.pickImapAccount(ctx, accountID)
 	if err != nil {
@@ -1402,20 +1639,30 @@ func (s *server) listImapMessages(c *gin.Context) {
 		return
 	}
 
+	if fresh {
+		if err := s.syncImapAccount(ctx, acc, limit, true); err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("同步 IMAP 失败: %v", err)})
+			return
+		}
+	}
+
 	msgs, err := s.readCachedMessages(ctx, acc.ID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("读取邮件失败: %v", err)})
 		return
 	}
+	msgs = dedupeByUID(msgs)
 	total, _ := s.countCachedMessages(ctx, acc.ID)
 	if len(msgs) > 0 {
 		c.Header("X-Total-Count", strconv.Itoa(total))
-		s.syncImapAccountAsync(*acc, 50)
+		if !fresh {
+			s.syncImapAccountAsync(*acc, 50, false)
+		}
 		c.JSON(http.StatusOK, msgs)
 		return
 	}
 
-	if err := s.syncImapAccount(ctx, acc, 50); err != nil {
+	if err := s.syncImapAccount(ctx, acc, 50, fresh); err != nil {
 		fmt.Printf("warn: 同步 IMAP 失败: %v\n", err)
 	}
 
@@ -1551,14 +1798,14 @@ func (s *server) getImapMessage(c *gin.Context) {
 
 	msg, err := s.readCachedMessage(ctx, acc.ID, uint32(uid64))
 	if err == nil {
-		s.syncImapAccountAsync(*acc, 20)
+		s.syncImapAccountAsync(*acc, 20, false)
 		c.JSON(http.StatusOK, msg)
 		return
 	}
 
 	lastErr := err
 
-	if err := s.syncImapAccount(ctx, acc, 20); err != nil {
+	if err := s.syncImapAccount(ctx, acc, 20, false); err != nil {
 		fmt.Printf("warn: 同步 IMAP 失败: %v\n", err)
 		lastErr = err
 	}
@@ -1612,10 +1859,18 @@ func fetchImapMessageDetail(ctx context.Context, acc imapAccount, uid uint32) (i
 	section := &imap.BodySectionName{}
 	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid, section.FetchItem()}
 	ch := make(chan *imap.Message, 1)
-	if err := c.Fetch(seqset, items, ch); err != nil {
+	done := make(chan error, 1)
+	go func() {
+		done <- c.UidFetch(seqset, items, ch)
+	}()
+	var msg *imap.Message
+	for m := range ch {
+		msg = m
+	}
+	if err := <-done; err != nil {
 		return imapMessage{}, err
 	}
-	msg, ok := <-ch
+	ok := msg != nil
 	if !ok || msg == nil || msg.Envelope == nil {
 		return imapMessage{}, errors.New("邮件不存在")
 	}
@@ -1677,6 +1932,49 @@ func parseBody(body io.Reader) (string, error) {
 	return "", nil
 }
 
+func uidFetchMessageDetail(c *client.Client, uid uint32) (imapMessage, error) {
+	if c == nil {
+		return imapMessage{}, errors.New("imap client is nil")
+	}
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(uid)
+	section := &imap.BodySectionName{}
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid, section.FetchItem()}
+	ch := make(chan *imap.Message, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.UidFetch(seqset, items, ch)
+	}()
+	var msg *imap.Message
+	for m := range ch {
+		msg = m
+	}
+	if err := <-done; err != nil {
+		return imapMessage{}, err
+	}
+	if msg == nil || msg.Envelope == nil {
+		return imapMessage{}, errors.New("邮件不存在")
+	}
+
+	body, _ := parseBody(msg.GetBody(section))
+
+	var fromAddr string
+	if len(msg.Envelope.From) > 0 {
+		fromAddr = safeUTF8(msg.Envelope.From[0].Address())
+	}
+	date := msg.Envelope.Date.Format(time.RFC3339)
+
+	return imapMessage{
+		UID:     msg.Uid,
+		Subject: safeUTF8(msg.Envelope.Subject),
+		From:    fromAddr,
+		Date:    date,
+		Flags:   msg.Flags,
+		Snippet: "",
+		Body:    safeUTF8(body),
+	}, nil
+}
+
 func escapeText(s string) string {
 	return strings.ReplaceAll(html.EscapeString(s), "\n", "<br>")
 }
@@ -1695,17 +1993,17 @@ func decodePart(ih *mail.InlineHeader, r io.Reader) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
-func (s *server) syncImapAccountAsync(acc imapAccount, limit int) {
+func (s *server) syncImapAccountAsync(acc imapAccount, limit int, force bool) {
 	go func(a imapAccount) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := s.syncImapAccount(ctx, &a, limit); err != nil {
+		if err := s.syncImapAccount(ctx, &a, limit, force); err != nil {
 			fmt.Printf("warn: 同步 IMAP 失败: %v\n", err)
 		}
 	}(acc)
 }
 
-func (s *server) syncImapAccount(ctx context.Context, acc *imapAccount, limit int) error {
+func (s *server) syncImapAccount(ctx context.Context, acc *imapAccount, limit int, force bool) error {
 	address := fmt.Sprintf("%s:%d", acc.Host, acc.Port)
 	var c *client.Client
 	var err error
@@ -1764,6 +2062,9 @@ func (s *server) syncImapAccount(ctx context.Context, acc *imapAccount, limit in
 		}
 		fetched = append(fetched, row{uid: msg.Uid, msg: msg})
 	}
+	sort.Slice(fetched, func(i, j int) bool {
+		return fetched[i].uid < fetched[j].uid
+	})
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1778,20 +2079,107 @@ func (s *server) syncImapAccount(ctx context.Context, acc *imapAccount, limit in
 		acc.LastUID = 0
 	}
 
-	var maxUID uint32 = acc.LastUID
-	for i := len(fetched) - 1; i >= 0; i-- { // ensure ascending insert
-		msg := fetched[i].msg
-		uid := fetched[i].uid
-		if uid <= acc.LastUID {
+	lastSeen := acc.LastUID
+	if force {
+		lastSeen = 0
+	}
+	var maxUID uint32 = lastSeen
+	var toUpsert []row
+	for _, r := range fetched {
+		if r.uid <= lastSeen {
 			continue
 		}
-		if uid > maxUID {
-			maxUID = uid
+		toUpsert = append(toUpsert, r)
+		if r.uid > maxUID {
+			maxUID = r.uid
 		}
-		detail, err := fetchImapMessageDetail(ctx, *acc, uid)
-		if err != nil {
-			continue
+	}
+
+	section := &imap.BodySectionName{}
+	bodyItems := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid, section.FetchItem()}
+	bodies := make(map[uint32]imapMessage)
+	bodyFailures := make(map[uint32]string)
+	var bodyFetchErr error
+	if len(toUpsert) > 0 {
+		uidset := new(imap.SeqSet)
+		for _, r := range toUpsert {
+			uidset.AddNum(r.uid)
 		}
+		ch := make(chan *imap.Message, len(toUpsert))
+		done := make(chan error, 1)
+		go func() {
+			done <- c.UidFetch(uidset, bodyItems, ch)
+		}()
+		for m := range ch {
+			if m == nil || m.Envelope == nil {
+				continue
+			}
+			body, _ := parseBody(m.GetBody(section))
+			var fromAddr string
+			if len(m.Envelope.From) > 0 {
+				fromAddr = safeUTF8(m.Envelope.From[0].Address())
+			}
+			date := m.Envelope.Date.Format(time.RFC3339)
+			bodies[m.Uid] = imapMessage{
+				UID:     m.Uid,
+				Subject: safeUTF8(m.Envelope.Subject),
+				From:    fromAddr,
+				Date:    date,
+				Flags:   m.Flags,
+				Snippet: "",
+				Body:    safeUTF8(body),
+			}
+		}
+		if err := <-done; err != nil {
+			bodyFetchErr = err
+		}
+
+		if bodyFetchErr != nil || len(bodies) != len(toUpsert) {
+			for _, r := range toUpsert {
+				if _, ok := bodies[r.uid]; ok {
+					continue
+				}
+				detail, err := uidFetchMessageDetail(c, r.uid)
+				if err != nil {
+					bodyFailures[r.uid] = err.Error()
+					continue
+				}
+				bodies[r.uid] = detail
+			}
+		}
+	}
+
+	for _, r := range toUpsert {
+		msg := r.msg
+		uid := r.uid
+
+		detail, ok := bodies[uid]
+		if !ok {
+			var fromAddr string
+			if msg.Envelope != nil && len(msg.Envelope.From) > 0 {
+				fromAddr = msg.Envelope.From[0].Address()
+			}
+			date := ""
+			if msg.Envelope != nil {
+				date = msg.Envelope.Date.Format(time.RFC3339)
+			}
+			reason := "邮件正文不可用"
+			if perUID, ok := bodyFailures[uid]; ok && strings.TrimSpace(perUID) != "" {
+				reason = perUID
+			} else if bodyFetchErr != nil {
+				reason = fmt.Sprintf("%v", bodyFetchErr)
+			}
+			detail = imapMessage{
+				UID:     uid,
+				Subject: safeUTF8(msg.Envelope.Subject),
+				From:    safeUTF8(fromAddr),
+				Date:    date,
+				Flags:   msg.Flags,
+				Snippet: "",
+				Body:    fmt.Sprintf("正文抓取失败: %s", reason),
+			}
+		}
+
 		var msgTime *time.Time
 		if detail.Date != "" {
 			if t, err := time.Parse(time.RFC3339, detail.Date); err == nil {
@@ -1831,9 +2219,13 @@ func (s *server) syncImapAccount(ctx context.Context, acc *imapAccount, limit in
 func (s *server) readCachedMessages(ctx context.Context, accountID string, limit, offset int) ([]imapMessage, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT uid, subject, from_addr, msg_date, flags, body_html, body_plain
-		FROM imap_messages
-		WHERE account_id=$1
-		ORDER BY msg_date DESC NULLS LAST
+		FROM (
+			SELECT DISTINCT ON (uid) uid, subject, from_addr, msg_date, flags, body_html, body_plain, created_at
+			FROM imap_messages
+			WHERE account_id=$1
+			ORDER BY uid, uidvalidity DESC, created_at DESC
+		) t
+		ORDER BY msg_date DESC NULLS LAST, uid DESC
 		LIMIT $2 OFFSET $3`, accountID, limit, offset)
 	if err != nil {
 		return nil, err
@@ -1866,7 +2258,7 @@ func (s *server) readCachedMessages(ctx context.Context, accountID string, limit
 
 func (s *server) countCachedMessages(ctx context.Context, accountID string) (int, error) {
 	var total int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM imap_messages WHERE account_id=$1`, accountID).Scan(&total)
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT uid) FROM imap_messages WHERE account_id=$1`, accountID).Scan(&total)
 	return total, err
 }
 
@@ -1879,6 +2271,8 @@ func (s *server) readCachedMessage(ctx context.Context, accountID string, uid ui
 		SELECT uid, subject, from_addr, msg_date, flags, body_html, body_plain
 		FROM imap_messages
 		WHERE account_id=$1 AND uid=$2
+		ORDER BY uidvalidity DESC, created_at DESC
+		LIMIT 1
 	`, accountID, uid).Scan(&m.UID, &m.Subject, &m.From, &msgDate, &flags, &bodyHTML, &bodyPlain)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1898,6 +2292,19 @@ func (s *server) readCachedMessage(ctx context.Context, accountID string, uid ui
 		m.Body = escapeText(bodyPlain.String)
 	}
 	return m, nil
+}
+
+func dedupeByUID(msgs []imapMessage) []imapMessage {
+	seen := make(map[uint32]bool)
+	var res []imapMessage
+	for _, m := range msgs {
+		if seen[m.UID] {
+			continue
+		}
+		seen[m.UID] = true
+		res = append(res, m)
+	}
+	return res
 }
 
 func (s *server) ensureArchive(ctx context.Context, name string) (string, error) {

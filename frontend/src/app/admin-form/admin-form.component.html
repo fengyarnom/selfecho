@@ -26,7 +26,28 @@
     </div>
     <div class="field">
       <label>Slug</label>
-      <input name="slug" [(ngModel)]="form.slug" placeholder="可留空，自动拼音化" />
+      <div class="slug-row">
+        <input name="slug" [(ngModel)]="form.slug" placeholder="可留空，自动拼音化" />
+        <div class="slug-actions">
+          <button
+            type="button"
+            class="btn ghost"
+            [disabled]="slugGenerating"
+            (click)="generateSlug('llm')"
+          >
+            {{ slugGenerating ? '生成中...' : 'LLM 生成' }}
+          </button>
+          <button
+            type="button"
+            class="btn ghost"
+            [disabled]="slugGenerating"
+            (click)="generateSlug('pinyin')"
+          >
+            拼音
+          </button>
+        </div>
+      </div>
+      <p class="muted" *ngIf="slugMessage">{{ slugMessage }}</p>
     </div>
     <div class="field">
       <label>归档名称</label>

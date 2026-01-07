@@ -9,14 +9,14 @@
         <a routerLink="/admin/health" class="link inline-flex items-center gap-1">
           Health <span class="text-xs">▾</span>
         </a>
-        <div class="menu" *ngIf="showMenu">
-        <a class="menu-item" routerLink="/admin/posts">Posts</a>
-        <a class="menu-item" routerLink="/admin/archive">Archives</a>
-          <a class="menu-item" routerLink="/admin/email">Email</a>
-        <a class="menu-item" routerLink="/admin">Memos</a>
-        <a class="menu-item" routerLink="/admin/health">Health</a>
+            <div class="menu" *ngIf="showMenu">
+              <a class="menu-item" routerLink="/admin/posts">Posts</a>
+              <a class="menu-item" routerLink="/admin/archive">Archives</a>
+              <a class="menu-item" routerLink="/admin/email">Email</a>
+              <a class="menu-item" routerLink="/admin">Memos</a>
+              <a class="menu-item" routerLink="/admin/health">Health</a>
+            </div>
       </div>
-    </div>
   </nav>
     <button class="text-link" (click)="fetch()" [disabled]="loading">刷新</button>
   </div>

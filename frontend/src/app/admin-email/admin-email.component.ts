@@ -49,6 +49,13 @@ export class AdminEmailComponent implements OnInit {
   page = 1;
   pageSize = 12;
   total = 0;
+  diagnoseLoading = false;
+  diagnoseError = '';
+  diagnoseSubjects: string[] = [];
+  diagnoseAccount = '';
+  diagnoseHost = '';
+  rebuildLoading = false;
+  rebuildError = '';
 
   form = {
     host: '',
@@ -94,10 +101,10 @@ export class AdminEmailComponent implements OnInit {
         this.saving = false;
         this.error = err?.error?.error || '保存失败';
       }
-    });
+      });
   }
 
-  loadMessages(accountId?: string): void {
+  loadMessages(accountId?: string, fresh = false): void {
     if (this.loading) return;
     this.loading = true;
     this.error = '';
@@ -109,6 +116,9 @@ export class AdminEmailComponent implements OnInit {
       limit: this.pageSize,
       page: this.page
     };
+    if (fresh) {
+      params.fresh = 'true';
+    }
     const targetId = accountId || this.selectedAccountId || (this.accounts.length ? this.accounts[0].id : undefined);
     if (targetId) {
       params.accountId = targetId;
@@ -131,6 +141,59 @@ export class AdminEmailComponent implements OnInit {
         error: (err) => {
           this.error = err?.error?.error || '加载邮件失败';
           this.loading = false;
+        }
+      });
+  }
+
+  checkLiveFetch(accountId?: string): void {
+    if (this.diagnoseLoading) return;
+    this.diagnoseLoading = true;
+    this.diagnoseError = '';
+    const params: any = {};
+    const targetId = accountId || this.selectedAccountId || (this.accounts.length ? this.accounts[0].id : undefined);
+    if (targetId) {
+      params.accountId = targetId;
+      this.selectedAccountId = targetId;
+    }
+    this.http
+      .get<{ subjects: string[]; count: number; username: string; host: string; accountId: string }>(`${API_BASE}/imap/diagnose`, {
+        params,
+        withCredentials: true
+      })
+      .subscribe({
+        next: (data) => {
+          this.diagnoseLoading = false;
+          this.diagnoseSubjects = data?.subjects || [];
+          this.diagnoseAccount = data?.username || '';
+          this.diagnoseHost = data?.host || '';
+        },
+        error: (err) => {
+          this.diagnoseLoading = false;
+          this.diagnoseError = err?.error?.error || '即时拉取失败';
+        }
+      });
+  }
+
+  rebuildCache(accountId?: string): void {
+    const targetId = accountId || this.selectedAccountId || (this.accounts.length ? this.accounts[0].id : undefined);
+    if (!targetId) return;
+    if (!confirm('将清空该账号的本地邮件缓存并重新拉取最新邮件，继续？')) return;
+    if (this.rebuildLoading) return;
+    this.rebuildLoading = true;
+    this.rebuildError = '';
+    this.http
+      .post<{ count: number }>(`${API_BASE}/imap/rebuild`, null, {
+        params: { accountId: targetId },
+        withCredentials: true
+      })
+      .subscribe({
+        next: () => {
+          this.rebuildLoading = false;
+          this.loadMessages(targetId, true);
+        },
+        error: (err) => {
+          this.rebuildLoading = false;
+          this.rebuildError = err?.error?.error || '重建缓存失败';
         }
       });
   }

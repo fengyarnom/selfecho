@@ -61,17 +61,18 @@
       <label>内容</label>
       <div class="editor-wrap">
         <div class="editor-toolbar">
-          <button type="button" class="editor-btn" [class.active]="editorView === 'rich'" (click)="setEditorView('rich')">
-            编辑
-          </button>
-          <button type="button" class="editor-btn" [class.active]="editorView === 'source'" (click)="setEditorView('source')">
-            源码
-          </button>
-          <button type="button" class="editor-btn" [class.active]="editorView === 'preview'" (click)="setEditorView('preview')">
-            预览
-          </button>
-          <span class="editor-sep"></span>
-          <ng-container *ngIf="editorView === 'rich'">
+          <div class="editor-toolbar-row editor-toolbar-modes">
+            <button type="button" class="mode-btn" [class.active]="editorView === 'rich'" (click)="setEditorView('rich')" title="编辑" aria-label="编辑">
+              <span class="mode-icon">📝</span>
+            </button>
+            <button type="button" class="mode-btn" [class.active]="editorView === 'source'" (click)="setEditorView('source')" title="源码" aria-label="源码">
+              <span class="mode-icon code">&lt;/&gt;</span>
+            </button>
+            <button type="button" class="mode-btn" [class.active]="editorView === 'preview'" (click)="setEditorView('preview')" title="预览" aria-label="预览">
+              <span class="mode-icon">👁</span>
+            </button>
+          </div>
+          <div class="editor-toolbar-row editor-toolbar-actions" *ngIf="editorView === 'rich'">
             <button type="button" class="editor-btn" [class.active]="editorActive('heading', { level: 1 })" (click)="toggleHeading(1)">
               H1
             </button>
@@ -92,7 +93,7 @@
             <button type="button" class="editor-btn" [class.active]="editorActive('blockquote')" (click)="toggleBlockquote()">❝</button>
             <button type="button" class="editor-btn" [class.active]="editorActive('codeBlock')" (click)="toggleCodeBlock()">```</button>
             <button type="button" class="editor-btn" (click)="insertHorizontalRule()">—</button>
-          </ng-container>
+          </div>
         </div>
         <div class="editor-surface" [class.disabled]="saving">
           <div #editorHost class="tiptap-host article-body" [class.hidden]="editorView !== 'rich'"></div>
@@ -112,7 +113,6 @@
       <span class="error" *ngIf="error">{{ error }}</span>
       <div class="spacer"></div>
       <label class="status-control">
-        <span class="status-label">状态</span>
         <select name="status" [(ngModel)]="form.status" class="status-select">
           <option value="draft">草稿</option>
           <option value="published">已发布</option>

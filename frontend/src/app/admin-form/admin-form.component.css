@@ -52,6 +52,8 @@
   gap: 10px;
   margin-top: 4px;
   flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
 }
 
 .error {
@@ -77,9 +79,10 @@
 }
 
 .status-select {
-  padding: 6px 10px;
+  height: 36px;
+  padding: 0 12px;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   background: #fff;
 }
@@ -97,6 +100,12 @@
   background: #3273dc;
   color: #fff;
   cursor: pointer;
+}
+
+.actions-bar .btn.primary {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
 }
 
 .btn.primary {
@@ -177,12 +186,63 @@
 
 .editor-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px;
   border-bottom: 1px solid #e5e7eb;
   background: #f8fafc;
+}
+
+.editor-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-toolbar-modes {
+  align-self: flex-start;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.mode-btn {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.mode-btn:hover:not(:disabled):not(.active) {
+  background: #f1f5f9;
+}
+
+.mode-btn.active {
+  background: #eef6ff;
+  color: #1d4ed8;
+}
+
+.mode-icon {
+  display: inline-block;
+  font-size: 14px;
+}
+
+.mode-icon.code {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.editor-toolbar-actions {
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
 }
 
 .editor-sep {

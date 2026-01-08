@@ -167,3 +167,90 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+.editor-wrap {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.editor-sep {
+  width: 1px;
+  height: 20px;
+  background: #e5e7eb;
+  margin: 0 2px;
+}
+
+.editor-btn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #111827;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.editor-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.editor-btn.active {
+  border-color: #bfdbfe;
+  background: #eef6ff;
+  color: #1d4ed8;
+}
+
+.editor-surface {
+  padding: 10px 12px;
+}
+
+.editor-surface.disabled {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.source-editor {
+  width: 100%;
+  min-height: 320px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  resize: vertical;
+  outline: none;
+}
+
+.source-editor:focus {
+  border-color: #93c5fd;
+  outline: 2px solid #93c5fd;
+}
+
+.markdown-preview {
+  min-height: 320px;
+}
+
+:host ::ng-deep .ProseMirror {
+  min-height: 320px;
+  outline: none;
+  line-height: 1.8;
+}

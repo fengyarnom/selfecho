@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-primary-main: 50 115 220;
+}
+
 /* Base typography inspired by the provided style guide */
 body {
   font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Microsoft YaHei",
@@ -43,91 +47,4 @@ p {
     width: 100%;
     padding: 1em 2em;
   }
-}
-
-.article-body code {
-  font-size: 0.95rem;
-  color: #222;
-  background: #e8eff0;
-  padding: 0.35rem 0.4rem;
-  border-radius: 0.25rem;
-}
-
-.article-body pre {
-  margin: 0 0 1.5rem;
-  padding: 0.75rem 1.25rem;
-  background: #f8f8f8;
-  color: #666;
-  border-radius: 0.3rem;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-y: hidden;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-.article-body pre code {
-  font-size: 0.9rem;
-  border-radius: 0.25rem;
-  background: none;
-  padding: 0;
-}
-
-.article-body h1,
-.article-body h2,
-.article-body h3,
-.article-body h4,
-.article-body h5,
-.article-body h6 {
-  font-weight: 700;
-  line-height: 1.25;
-  margin: 0.9em 0 0.6em;
-  color: #3d3d3f;
-}
-
-.article-body h1 {
-  font-size: 1.7rem;
-}
-
-.article-body h2 {
-  font-size: 1.45rem;
-}
-
-.article-body h3 {
-  font-size: 1.3rem;
-}
-
-.article-body h4 {
-  font-size: 1.1rem;
-}
-
-.article-body h5 {
-  font-size: 1rem;
-}
-
-.article-body h6 {
-  font-size: 0.95rem;
-  letter-spacing: 0.01em;
-}
-
-.article-body h1::before,
-.article-body h2::before,
-.article-body h3::before {
-  display: inline-block;
-  margin-right: 0.35em;
-  color: #ff7e79;
-  font-weight: 1000;
-  content: '';
-}
-
-.article-body h1::before {
-  content: '#';
-}
-
-.article-body h2::before {
-  content: '##';
-}
-
-.article-body h3::before {
-  content: '###';
 }

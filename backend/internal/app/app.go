@@ -1029,29 +1029,30 @@ func resolveStaticDir(cfgPath, staticDir string) string {
 		cfgDir = "."
 	}
 
-	type candidate struct {
-		path string
-	}
-
-	var candidates []candidate
+	var candidates []string
 	if staticDir != "" {
-		candidates = append(candidates, candidate{path: staticDir})
+		candidates = append(candidates, staticDir)
 		if !filepath.IsAbs(staticDir) && cfgDir != "." {
-			candidates = append(candidates, candidate{path: filepath.Join(cfgDir, staticDir)})
+			candidates = append(candidates, filepath.Join(cfgDir, staticDir))
 		}
 	}
 
 	candidates = append(candidates,
-		candidate{path: filepath.Join(cfgDir, "static")},
-		candidate{path: filepath.Join(cfgDir, "frontend", "dist", "selfecho-frontend")},
-		candidate{path: filepath.Join(cfgDir, "..", "frontend", "dist", "selfecho-frontend")},
+		filepath.Join(cfgDir, "static"),
+		filepath.Join(cfgDir, "frontend", "dist", "selfecho-frontend"),
+		filepath.Join(cfgDir, "..", "frontend", "dist", "selfecho-frontend"),
 	)
 
 	seen := make(map[string]struct{}, len(candidates))
-	for _, c := range candidates {
-		dir := filepath.Clean(c.path)
-		if dir == "" {
-			continue
+	type scoredCandidate struct {
+		dir   string
+		score time.Time
+	}
+	var best scoredCandidate
+	for _, raw := range candidates {
+		dir := filepath.Clean(raw)
+		if dir == "" || dir == "." {
+			dir = "."
 		}
 		if _, ok := seen[dir]; ok {
 			continue
@@ -1062,10 +1063,30 @@ func resolveStaticDir(cfgPath, staticDir string) string {
 		if err != nil || !info.IsDir() {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(dir, "index.html")); err != nil {
+		indexInfo, err := os.Stat(filepath.Join(dir, "index.html"))
+		if err != nil {
 			continue
 		}
-		return dir
+
+		score := indexInfo.ModTime()
+		if matches, _ := filepath.Glob(filepath.Join(dir, "styles*.css")); len(matches) > 0 {
+			for _, p := range matches {
+				if fi, err := os.Stat(p); err == nil && fi.ModTime().After(score) {
+					score = fi.ModTime()
+				}
+			}
+		}
+
+		if best.dir == "" || score.After(best.score) {
+			best = scoredCandidate{dir: dir, score: score}
+		}
+	}
+
+	if best.dir != "" {
+		if staticDir != "" && filepath.Clean(staticDir) != best.dir {
+			fmt.Printf("info: staticDir=%s resolved to %s\n", staticDir, best.dir)
+		}
+		return best.dir
 	}
 
 	return filepath.Clean(staticDir)
@@ -1269,12 +1290,13 @@ func (s *server) listArticles(c *gin.Context) {
 }
 
 type articlePayload struct {
-	Title   string `json:"title"`
-	Slug    string `json:"slug"`
-	Archive string `json:"archive"`
-	Status  string `json:"status"`
-	Type    string `json:"type"`
-	BodyMD  string `json:"bodyMd"`
+	Title    string `json:"title"`
+	Slug     string `json:"slug"`
+	Archive  string `json:"archive"`
+	Status   string `json:"status"`
+	Type     string `json:"type"`
+	BodyMD   string `json:"bodyMd"`
+	BodyHTML string `json:"bodyHtml"`
 }
 
 func (s *server) createArticle(c *gin.Context) {
@@ -1314,7 +1336,10 @@ func (s *server) createArticle(c *gin.Context) {
 		publishedAt = sql.NullTime{Valid: true, Time: time.Now()}
 	}
 
-	bodyHTML := renderMarkdown(payload.BodyMD)
+	bodyHTML := strings.TrimSpace(payload.BodyHTML)
+	if bodyHTML == "" {
+		bodyHTML = renderMarkdown(payload.BodyMD)
+	}
 
 	var createdID string
 	for attempt := 0; attempt < 3; attempt++ {
@@ -1385,7 +1410,10 @@ func (s *server) updateArticle(c *gin.Context) {
 		publishedAt = sql.NullTime{Valid: true, Time: time.Now()}
 	}
 
-	bodyHTML := renderMarkdown(payload.BodyMD)
+	bodyHTML := strings.TrimSpace(payload.BodyHTML)
+	if bodyHTML == "" {
+		bodyHTML = renderMarkdown(payload.BodyMD)
+	}
 
 	var res sql.Result
 	for attempt := 0; attempt < 3; attempt++ {

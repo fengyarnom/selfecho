@@ -59,7 +59,53 @@
     </div>
     <div class="field">
       <label>内容</label>
-      <textarea name="bodyMd" [(ngModel)]="form.bodyMd" rows="12"></textarea>
+      <div class="editor-wrap">
+        <div class="editor-toolbar">
+          <button type="button" class="editor-btn" [class.active]="editorView === 'rich'" (click)="setEditorView('rich')">
+            编辑
+          </button>
+          <button type="button" class="editor-btn" [class.active]="editorView === 'source'" (click)="setEditorView('source')">
+            源码
+          </button>
+          <button type="button" class="editor-btn" [class.active]="editorView === 'preview'" (click)="setEditorView('preview')">
+            预览
+          </button>
+          <span class="editor-sep"></span>
+          <ng-container *ngIf="editorView === 'rich'">
+            <button type="button" class="editor-btn" [class.active]="editorActive('heading', { level: 1 })" (click)="toggleHeading(1)">
+              H1
+            </button>
+            <button type="button" class="editor-btn" [class.active]="editorActive('heading', { level: 2 })" (click)="toggleHeading(2)">
+              H2
+            </button>
+            <button type="button" class="editor-btn" [class.active]="editorActive('heading', { level: 3 })" (click)="toggleHeading(3)">
+              H3
+            </button>
+            <span class="editor-sep"></span>
+            <button type="button" class="editor-btn" [class.active]="editorActive('bold')" (click)="toggleBold()">B</button>
+            <button type="button" class="editor-btn" [class.active]="editorActive('italic')" (click)="toggleItalic()">I</button>
+            <button type="button" class="editor-btn" [class.active]="editorActive('strike')" (click)="toggleStrike()">S</button>
+            <button type="button" class="editor-btn" [class.active]="editorActive('code')" (click)="toggleInlineCode()">`</button>
+            <span class="editor-sep"></span>
+            <button type="button" class="editor-btn" [class.active]="editorActive('bulletList')" (click)="toggleBulletList()">•</button>
+            <button type="button" class="editor-btn" [class.active]="editorActive('orderedList')" (click)="toggleOrderedList()">1.</button>
+            <button type="button" class="editor-btn" [class.active]="editorActive('blockquote')" (click)="toggleBlockquote()">❝</button>
+            <button type="button" class="editor-btn" [class.active]="editorActive('codeBlock')" (click)="toggleCodeBlock()">```</button>
+            <button type="button" class="editor-btn" (click)="insertHorizontalRule()">—</button>
+          </ng-container>
+        </div>
+        <div class="editor-surface" [class.disabled]="saving">
+          <div #editorHost class="tiptap-host article-body" [class.hidden]="editorView !== 'rich'"></div>
+          <textarea
+            *ngIf="editorView === 'source'"
+            class="source-editor"
+            [ngModelOptions]="{ standalone: true }"
+            [ngModel]="form.bodyMd"
+            (ngModelChange)="onMarkdownChange($event)"
+          ></textarea>
+          <div *ngIf="editorView === 'preview'" class="markdown-preview article-body" [innerHTML]="markdownHtml"></div>
+        </div>
+      </div>
     </div>
 
     <div class="actions-bar">

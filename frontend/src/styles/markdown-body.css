@@ -1,0 +1,269 @@
+.article-body,
+.ProseMirror {
+  color: #3d3d3f;
+  line-height: 1.9;
+  word-break: break-word;
+}
+
+.article-body h1,
+.article-body h2,
+.article-body h3,
+.article-body h4,
+.article-body h5,
+.article-body h6,
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0.9em 0 0.6em;
+  color: #3d3d3f;
+}
+
+.article-body h1,
+.ProseMirror h1 {
+  font-size: 1.7rem;
+}
+
+.article-body h2,
+.ProseMirror h2 {
+  font-size: 1.45rem;
+}
+
+.article-body h3,
+.ProseMirror h3 {
+  font-size: 1.3rem;
+}
+
+.article-body h4,
+.ProseMirror h4 {
+  font-size: 1.1rem;
+}
+
+.article-body h5,
+.ProseMirror h5 {
+  font-size: 1rem;
+}
+
+.article-body h6,
+.ProseMirror h6 {
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+.article-body h1::before,
+.article-body h2::before,
+.article-body h3::before,
+.ProseMirror h1::before,
+.ProseMirror h2::before,
+.ProseMirror h3::before {
+  display: inline-block;
+  margin-right: 0.35em;
+  color: #ff7e79;
+  font-weight: 1000;
+  content: '';
+}
+
+.article-body h1::before,
+.ProseMirror h1::before {
+  content: '#';
+}
+
+.article-body h2::before,
+.ProseMirror h2::before {
+  content: '##';
+}
+
+.article-body h3::before,
+.ProseMirror h3::before {
+  content: '###';
+}
+
+.article-body p,
+.ProseMirror p {
+  margin: 0 0 1.1rem;
+  line-height: 2.1;
+}
+
+.article-body a,
+.ProseMirror a {
+  color: #0f172a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.article-body a:hover,
+.ProseMirror a:hover {
+  color: #3c546c;
+}
+
+.article-body img,
+.ProseMirror img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+  margin: 2.5rem auto;
+}
+
+.article-body code,
+.ProseMirror code {
+  font-size: 0.95rem;
+  color: #222;
+  background: #e8eff0;
+  padding: 0.35rem 0.4rem;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.article-body pre,
+.ProseMirror pre {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1.25rem;
+  background: #f8f8f8;
+  color: #666;
+  border-radius: 0.3rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.article-body pre code,
+.ProseMirror pre code {
+  font-size: 0.9rem;
+  border-radius: 0.25rem;
+  background: none;
+  padding: 0;
+}
+
+.article-body ul,
+.article-body ol,
+.ProseMirror ul,
+.ProseMirror ol {
+  margin: 0.5em 0 1.2em;
+  padding: 0;
+}
+
+.article-body ul > li,
+.article-body ol > li,
+.ProseMirror ul > li,
+.ProseMirror ol > li {
+  margin: 0.35em 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.55em;
+}
+
+.article-body li > p,
+.ProseMirror li > p {
+  margin: 0;
+}
+
+.article-body ul,
+.ProseMirror ul {
+  list-style: none;
+}
+
+.article-body ul > li::before,
+.ProseMirror ul > li::before {
+  content: '-';
+  color: #3d3d3f;
+}
+
+.article-body ol,
+.ProseMirror ol {
+  counter-reset: list-counter;
+  list-style: none;
+}
+
+.article-body ol > li,
+.ProseMirror ol > li {
+  counter-increment: list-counter;
+}
+
+.article-body ol > li::before,
+.ProseMirror ol > li::before {
+  content: counter(list-counter) ".";
+  color: #3d3d3f;
+  font-weight: 700;
+}
+
+.article-body blockquote,
+.ProseMirror blockquote {
+  margin: 0;
+  border-radius: 0.125rem 0.5rem 0.5rem 0.125rem;
+  border-left-style: solid;
+  background-color: rgb(243 244 246 / 1);
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 400;
+  border-left: 6px solid rgb(var(--color-primary-main)) !important;
+}
+
+.article-body blockquote p,
+.ProseMirror blockquote p {
+  margin: 0.4rem 0;
+}
+
+.article-body hr,
+.ProseMirror hr {
+  display: block;
+  border: 0;
+  margin: 2.24em auto;
+  height: 1.1em;
+  background: transparent;
+  overflow: visible;
+}
+
+.article-body hr::before,
+.ProseMirror hr::before,
+.article-body hr:before,
+.ProseMirror hr:before {
+  color: rgba(0, 0, 0, 0.2);
+  font-size: 1.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  content: "* * *";
+  text-align: center;
+}
+
+.article-body table,
+.ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2rem 0;
+  font-size: 0.95rem;
+}
+
+.article-body th,
+.article-body td,
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.article-body th,
+.ProseMirror th {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.article-body thead th,
+.ProseMirror thead th {
+  color: #111827;
+}
+
+.article-body > *:last-child,
+.ProseMirror > *:last-child {
+  margin-bottom: 0;
+}

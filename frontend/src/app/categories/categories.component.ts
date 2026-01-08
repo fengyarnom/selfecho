@@ -1,8 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, DestroyRef, OnInit } from '@angular/core';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { API_BASE } from '../api.config';
 import { RouterModule } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { SeoService } from '../seo.service';
+import { SiteTitleService } from '../site-title.service';
 
 interface CategoryItem {
   name: string;
@@ -21,9 +24,23 @@ export class CategoriesComponent implements OnInit {
   error = '';
   categories: CategoryItem[] = [];
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private seo: SeoService,
+    private siteTitle: SiteTitleService,
+    private destroyRef: DestroyRef
+  ) {}
 
   ngOnInit(): void {
+    this.siteTitle.title$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((baseTitle) =>
+        this.seo.update({
+          title: `分类 - ${baseTitle || 'Selfecho'}`,
+          description: '分类列表',
+          canonical: '/categories'
+        })
+      );
     this.load();
   }
 

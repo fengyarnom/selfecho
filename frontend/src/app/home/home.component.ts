@@ -1,11 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, DestroyRef, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { marked } from 'marked';
 import { API_BASE } from '../api.config';
 import * as katex from 'katex';
 import { RouterModule } from '@angular/router';
+import { SeoService } from '../seo.service';
+import { SiteTitleService } from '../site-title.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-home',
@@ -23,9 +26,24 @@ export class HomeComponent implements OnInit {
   limit = 6;
   total = 0;
 
-  constructor(private http: HttpClient, private sanitizer: DomSanitizer) {}
+  constructor(
+    private http: HttpClient,
+    private sanitizer: DomSanitizer,
+    private seo: SeoService,
+    private siteTitle: SiteTitleService,
+    private destroyRef: DestroyRef
+  ) {}
 
   ngOnInit(): void {
+    this.siteTitle.title$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((baseTitle) =>
+        this.seo.update({
+          title: baseTitle || 'Selfecho',
+          description: '最新文章列表',
+          canonical: '/'
+        })
+      );
     this.fetchArticles();
   }
 

@@ -1,11 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { marked } from 'marked';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { API_BASE } from '../api.config';
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { tiptapToMarkdown } from '../tiptap-markdown';
+import { TiptapImage } from '../tiptap-image';
+import { TiptapLink } from '../tiptap-link';
 
 type Status = 'draft' | 'published';
 type ArticleType = 'post' | 'memo';
@@ -17,6 +21,7 @@ interface ArticlePayload {
   status: Status;
   type: ArticleType;
   bodyMd: string;
+  bodyHtml?: string;
 }
 
 interface Article extends ArticlePayload {
@@ -30,8 +35,16 @@ interface Article extends ArticlePayload {
   templateUrl: './admin-form.component.html',
   styleUrls: ['./admin-form.component.css']
 })
-export class AdminFormComponent implements OnInit {
-  form: ArticlePayload = { title: '', slug: '', archive: '', status: 'draft', type: 'post', bodyMd: '' };
+export class AdminFormComponent implements OnInit, AfterViewInit, OnDestroy {
+  form: ArticlePayload = {
+    title: '',
+    slug: '',
+    archive: '',
+    status: 'draft',
+    type: 'post',
+    bodyMd: '',
+    bodyHtml: ''
+  };
   editingId: string | null = null;
   error = '';
   saving = false;
@@ -40,11 +53,15 @@ export class AdminFormComponent implements OnInit {
   archives: string[] = [];
   selectedArchive = '';
 
+  @ViewChild('editorHost') editorHost?: ElementRef<HTMLDivElement>;
+  editor: Editor | null = null;
+  editorView: 'rich' | 'source' | 'preview' = 'rich';
+  markdownHtml = '';
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private http: HttpClient,
-    private sanitizer: DomSanitizer
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
@@ -61,6 +78,28 @@ export class AdminFormComponent implements OnInit {
     this.loadArchives();
   }
 
+  ngAfterViewInit(): void {
+    if (!this.editorHost?.nativeElement) return;
+    this.editor = new Editor({
+      element: this.editorHost.nativeElement,
+      extensions: [StarterKit, TiptapImage, TiptapLink],
+      content: this.initialEditorHTML(),
+      onUpdate: ({ editor }) => {
+        this.form.bodyHtml = editor.getHTML();
+        this.form.bodyMd = tiptapToMarkdown(editor.getJSON());
+        this.markdownHtml = this.renderMarkdown(this.form.bodyMd);
+      }
+    });
+    this.form.bodyHtml = this.editor.getHTML();
+    this.form.bodyMd = tiptapToMarkdown(this.editor.getJSON());
+    this.markdownHtml = this.renderMarkdown(this.form.bodyMd);
+  }
+
+  ngOnDestroy(): void {
+    this.editor?.destroy();
+    this.editor = null;
+  }
+
   loadArticle(id: string) {
     this.http.get<Article[]>(`${API_BASE}/articles`).subscribe({
       next: (list) => {
@@ -75,8 +114,10 @@ export class AdminFormComponent implements OnInit {
           archive: found.archive || '',
           status: found.status,
           type: (found as any).type || 'post',
-          bodyMd: found.bodyMd || ''
+          bodyMd: found.bodyMd || '',
+          bodyHtml: (found as any).bodyHtml || ''
         };
+        this.syncEditorFromForm();
       },
       error: () => {
         this.error = '加载文章失败';
@@ -165,5 +206,104 @@ export class AdminFormComponent implements OnInit {
           this.error = err?.error?.error || '生成 slug 失败';
         }
       });
+  }
+
+  editorActive(type: string, attrs?: Record<string, any>): boolean {
+    return this.editor ? this.editor.isActive(type as any, attrs as any) : false;
+  }
+
+  toggleHeading(level: 1 | 2 | 3): void {
+    this.editor?.chain().focus().toggleHeading({ level }).run();
+  }
+
+  toggleBold(): void {
+    this.editor?.chain().focus().toggleBold().run();
+  }
+
+  toggleItalic(): void {
+    this.editor?.chain().focus().toggleItalic().run();
+  }
+
+  toggleStrike(): void {
+    this.editor?.chain().focus().toggleStrike().run();
+  }
+
+  toggleInlineCode(): void {
+    this.editor?.chain().focus().toggleCode().run();
+  }
+
+  toggleCodeBlock(): void {
+    this.editor?.chain().focus().toggleCodeBlock().run();
+  }
+
+  toggleBulletList(): void {
+    this.editor?.chain().focus().toggleBulletList().run();
+  }
+
+  toggleOrderedList(): void {
+    this.editor?.chain().focus().toggleOrderedList().run();
+  }
+
+  toggleBlockquote(): void {
+    this.editor?.chain().focus().toggleBlockquote().run();
+  }
+
+  insertHorizontalRule(): void {
+    this.editor?.chain().focus().setHorizontalRule().run();
+  }
+
+  private initialEditorHTML(): string {
+    const html = (this.form.bodyHtml || '').trim();
+    if (html) return html;
+    const md = (this.form.bodyMd || '').trim();
+    if (!md) return '';
+    const parsed = marked.parse(md, { breaks: true });
+    return typeof parsed === 'string' ? parsed : '';
+  }
+
+  private syncEditorFromForm(): void {
+    if (!this.editor) return;
+    const html = this.initialEditorHTML();
+    this.editor.commands.setContent(html, false);
+    this.form.bodyHtml = this.editor.getHTML();
+    this.form.bodyMd = tiptapToMarkdown(this.editor.getJSON());
+    this.markdownHtml = this.renderMarkdown(this.form.bodyMd);
+  }
+
+  setEditorView(view: 'rich' | 'source' | 'preview'): void {
+    if (this.editorView === view) return;
+
+    if (this.editorView === 'rich') {
+      this.syncFromEditor();
+    }
+
+    if (view === 'preview') {
+      this.markdownHtml = this.renderMarkdown(this.form.bodyMd);
+    }
+
+    this.editorView = view;
+
+    if (view === 'rich') {
+      this.syncEditorFromForm();
+      this.editor?.commands.focus();
+    }
+  }
+
+  onMarkdownChange(md: string): void {
+    this.form.bodyMd = md;
+    this.markdownHtml = this.renderMarkdown(md);
+    this.form.bodyHtml = this.markdownHtml;
+  }
+
+  private syncFromEditor(): void {
+    if (!this.editor) return;
+    this.form.bodyHtml = this.editor.getHTML();
+    this.form.bodyMd = tiptapToMarkdown(this.editor.getJSON());
+    this.markdownHtml = this.renderMarkdown(this.form.bodyMd);
+  }
+
+  private renderMarkdown(md: string): string {
+    const parsed = marked.parse(md || '', { breaks: true });
+    return typeof parsed === 'string' ? parsed : '';
   }
 }

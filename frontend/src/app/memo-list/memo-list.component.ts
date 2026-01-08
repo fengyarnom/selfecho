@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, DestroyRef, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { API_BASE } from '../api.config';
 import { SeoService } from '../seo.service';
 import { SiteTitleService } from '../site-title.service';
@@ -33,16 +34,20 @@ export class MemoListComponent implements OnInit {
   constructor(
     private http: HttpClient,
     private seo: SeoService,
-    private siteTitle: SiteTitleService
+    private siteTitle: SiteTitleService,
+    private destroyRef: DestroyRef
   ) {}
 
   ngOnInit(): void {
-    const baseTitle = this.siteTitle.title || 'Selfecho';
-    this.seo.update({
-      title: `备忘录 - ${baseTitle}`,
-      description: '备忘录列表',
-      canonical: '/memos'
-    });
+    this.siteTitle.title$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((baseTitle) =>
+        this.seo.update({
+          title: `备忘录 - ${baseTitle || 'Selfecho'}`,
+          description: '备忘录列表',
+          canonical: '/memos'
+        })
+      );
     this.fetchMemos();
   }
 

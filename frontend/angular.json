@@ -29,6 +29,7 @@
             ],
             "styles": [
               "src/styles.css",
+              "src/styles/markdown-body.css",
               "node_modules/katex/dist/katex.css"
             ],
             "scripts": []

@@ -1,6 +1,4 @@
 <section class="memo-page py-6 space-y-4">
-  <h1 class="text-[1.4rem] font-semibold text-[#3d3d3f]">备忘录</h1>
-
   <div *ngIf="loading" class="muted">加载中...</div>
   <div *ngIf="error" class="error">{{ error }}</div>
   <div *ngIf="!loading && !error && memos.length === 0" class="muted">暂无备忘录</div>

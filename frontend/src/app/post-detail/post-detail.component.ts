@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit } from '@angular/core';
+import { Component, DestroyRef, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { HttpClient } from '@angular/common/http';
@@ -8,6 +8,17 @@ import { SeoService } from '../seo.service';
 import { SiteTitleService } from '../site-title.service';
 import { marked } from 'marked';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+
+declare global {
+  interface Window {
+    remark_config?: {
+      host: string;
+      site_id: string;
+      url: string;
+    };
+    REMARK42?: any;
+  }
+}
 
 interface ArticlePayload {
   id: string;
@@ -26,13 +37,16 @@ interface ArticlePayload {
   templateUrl: './post-detail.component.html',
   styleUrls: ['./post-detail.component.css']
 })
-export class PostDetailComponent implements OnInit {
+export class PostDetailComponent implements OnInit, OnDestroy {
   loading = true;
   error = '';
   article?: { title: string; createdAt: string; archive?: string; body: SafeHtml };
   private slug = '';
   private baseTitle = this.siteTitle.title || 'Selfecho';
   private excerptSource = '';
+  private readonly remarkHost = 'https://comments.yarnom.com';
+  private readonly remarkSiteId = 'yarnom';
+  private readonly remarkScriptId = 'remark42-embed-script';
 
   constructor(
     private route: ActivatedRoute,
@@ -60,6 +74,10 @@ export class PostDetailComponent implements OnInit {
     this.fetchArticle(this.slug);
   }
 
+  ngOnDestroy(): void {
+    this.unmountRemark42();
+  }
+
   private fetchArticle(slug: string): void {
     this.loading = true;
     this.error = '';
@@ -73,6 +91,8 @@ export class PostDetailComponent implements OnInit {
           const list = res.body ?? [];
           const item = list[0];
           if (!item) {
+            this.unmountRemark42();
+            this.article = undefined;
             this.error = '文章不存在或未发布';
             const baseTitle = this.siteTitle.title || 'Selfecho';
             this.seo.update({
@@ -96,8 +116,11 @@ export class PostDetailComponent implements OnInit {
           };
           this.refreshHead();
           this.loading = false;
+          setTimeout(() => this.mountRemark42(), 0);
         },
         error: () => {
+          this.unmountRemark42();
+          this.article = undefined;
           this.error = '加载文章失败';
           this.refreshHead();
           this.loading = false;
@@ -149,5 +172,52 @@ export class PostDetailComponent implements OnInit {
 
   private collapseWhitespace(input: string): string {
     return input.replace(/\s+/g, ' ').trim();
+  }
+
+  private remarkUrl(): string {
+    if (typeof window === 'undefined') return '';
+    return window.location.origin + window.location.pathname;
+  }
+
+  private mountRemark42(): void {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    if (!document.getElementById('remark42')) return;
+
+    window.remark_config = {
+      host: this.remarkHost,
+      site_id: this.remarkSiteId,
+      url: this.remarkUrl()
+    };
+
+    try {
+      window.REMARK42?.destroy?.();
+    } catch {
+      // ignore
+    }
+
+    const old = document.getElementById(this.remarkScriptId);
+    if (old) old.remove();
+    try {
+      delete window.REMARK42;
+    } catch {
+      // ignore
+    }
+
+    const script = document.createElement('script');
+    script.id = this.remarkScriptId;
+    script.src = `${this.remarkHost}/web/embed.js`;
+    script.defer = true;
+    document.body.appendChild(script);
+  }
+
+  private unmountRemark42(): void {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    try {
+      window.REMARK42?.destroy?.();
+    } catch {
+      // ignore
+    }
+    const old = document.getElementById(this.remarkScriptId);
+    if (old) old.remove();
   }
 }

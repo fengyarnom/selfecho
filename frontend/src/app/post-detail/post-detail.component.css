@@ -35,6 +35,12 @@
   max-width: 100%;
 }
 
+.comments-wrap {
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5e7eb;
+}
+
 @media (max-width: 640px) {
     .post-meta {
         border-left: none;

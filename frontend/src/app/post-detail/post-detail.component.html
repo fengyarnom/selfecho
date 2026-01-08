@@ -9,8 +9,7 @@
       <p class="post-time text-xs text-[#aaa]">
         分类：
         <a
-          [routerLink]="['/archive']"
-          [queryParams]="{ archive: article.archive || '未分类' }"
+          [routerLink]="['/category', article.archive || '未分类']"
           class="category-link"
         >
           {{ article.archive || '未分类' }}

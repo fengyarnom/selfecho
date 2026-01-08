@@ -52,6 +52,11 @@ export class AdminFormComponent implements OnInit {
     if (id) {
       this.editingId = id;
       this.loadArticle(id);
+    } else {
+      const t = this.route.snapshot.queryParamMap.get('type');
+      if (t === 'post' || t === 'memo') {
+        this.form.type = t;
+      }
     }
     this.loadArchives();
   }

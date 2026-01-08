@@ -3,6 +3,8 @@ import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { API_BASE } from '../api.config';
+import { SeoService } from '../seo.service';
+import { SiteTitleService } from '../site-title.service';
 
 interface Memo {
   id: string;
@@ -28,9 +30,19 @@ export class MemoListComponent implements OnInit {
   limit = 12;
   total = 0;
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private seo: SeoService,
+    private siteTitle: SiteTitleService
+  ) {}
 
   ngOnInit(): void {
+    const baseTitle = this.siteTitle.title || 'Selfecho';
+    this.seo.update({
+      title: `备忘录 - ${baseTitle}`,
+      description: '备忘录列表',
+      canonical: '/memos'
+    });
     this.fetchMemos();
   }
 

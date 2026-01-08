@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { ActivatedRoute, RouterModule } from '@angular/router';
+import { combineLatest } from 'rxjs';
 import { API_BASE } from '../api.config';
 
 interface ArticlePayload {
@@ -31,8 +32,8 @@ export class ArchiveComponent implements OnInit {
   constructor(private http: HttpClient, private route: ActivatedRoute) {}
 
   ngOnInit(): void {
-    this.route.queryParamMap.subscribe((params) => {
-      this.selectedArchive = params.get('archive') || '';
+    combineLatest([this.route.paramMap, this.route.queryParamMap]).subscribe(([params, query]) => {
+      this.selectedArchive = params.get('name') || query.get('archive') || '';
       this.load();
     });
   }

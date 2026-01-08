@@ -58,13 +58,6 @@
       <input name="archive" [(ngModel)]="form.archive" placeholder="" />
     </div>
     <div class="field">
-      <label>状态</label>
-      <select name="status" [(ngModel)]="form.status">
-        <option value="draft">草稿</option>
-        <option value="published">已发布</option>
-      </select>
-    </div>
-    <div class="field">
       <label>内容</label>
       <textarea name="bodyMd" [(ngModel)]="form.bodyMd" rows="12"></textarea>
     </div>
@@ -72,6 +65,13 @@
     <div class="actions-bar">
       <span class="error" *ngIf="error">{{ error }}</span>
       <div class="spacer"></div>
+      <label class="status-control">
+        <span class="status-label">状态</span>
+        <select name="status" [(ngModel)]="form.status" class="status-select">
+          <option value="draft">草稿</option>
+          <option value="published">已发布</option>
+        </select>
+      </label>
       <button type="submit" class="btn primary" [disabled]="saving">
         {{ saving ? '保存中...' : '保存' }}
       </button>

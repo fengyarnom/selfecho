@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { API_BASE } from '../api.config';
 
@@ -36,11 +36,43 @@ export class AdminComponent implements OnInit {
   limit = 10;
   total = 0;
   filterType: ArticleType | 'all' = 'all';
+  fixedType: ArticleType | null = null;
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private route: ActivatedRoute
+  ) {}
 
   ngOnInit(): void {
-    this.loadArticles();
+    this.route.data.subscribe((data) => {
+      const fixed = data?.['fixedType'];
+      this.fixedType = fixed === 'post' || fixed === 'memo' ? fixed : null;
+      if (this.fixedType) {
+        this.filterType = this.fixedType;
+      }
+      this.page = 1;
+      this.loadArticles();
+    });
+  }
+
+  get pageLabel(): string {
+    if (this.fixedType === 'memo') return 'Memos';
+    return 'Posts';
+  }
+
+  get emptyLabel(): string {
+    if (this.fixedType === 'memo') return '暂无备忘录';
+    return '暂无文章';
+  }
+
+  get newLabel(): string {
+    if (this.fixedType === 'memo') return 'New Memo';
+    return 'New Post';
+  }
+
+  get newTypeQueryParam(): ArticleType | null {
+    if (this.fixedType === 'post' || this.fixedType === 'memo') return this.fixedType;
+    return this.filterType === 'all' ? null : this.filterType;
   }
 
   get totalPages(): number {
@@ -63,13 +95,14 @@ export class AdminComponent implements OnInit {
 
   loadArticles() {
     this.loading = true;
+    const typeParam = this.fixedType ? this.fixedType : this.filterType === 'all' ? '' : this.filterType;
     this.http
       .get<Article[]>(`${API_BASE}/articles`, {
         observe: 'response',
         params: {
           page: this.page,
           limit: this.limit,
-          type: this.filterType === 'all' ? '' : this.filterType,
+          type: typeParam,
           compact: '1'
         }
       })

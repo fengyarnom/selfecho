@@ -92,7 +92,7 @@ section.admin-page {
 
 .admin-table td:first-child {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.4;
   word-break: break-word;
 }

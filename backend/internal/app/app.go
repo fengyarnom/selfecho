@@ -323,14 +323,24 @@ func (s *server) generateSlug(c *gin.Context) {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"slug": slugVal, "source": "llm"})
+		uniqueSlug, err := s.ensureUniqueSlug(c.Request.Context(), slugVal, "")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "slug 去重失败"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"slug": uniqueSlug, "source": "llm", "deduped": uniqueSlug != slugVal})
 	case "pinyin":
 		slugVal, err := makeSlug(title, "")
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"slug": slugVal, "source": "pinyin"})
+		uniqueSlug, err := s.ensureUniqueSlug(c.Request.Context(), slugVal, "")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "slug 去重失败"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"slug": uniqueSlug, "source": "pinyin", "deduped": uniqueSlug != slugVal})
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "mode 仅支持 llm 或 pinyin"})
 	}
@@ -436,6 +446,7 @@ func Run() error {
 	if err != nil {
 		return err
 	}
+	staticDir := resolveStaticDir(cfgPath, cfg.StaticDir)
 	db, err := ensureDB(context.Background(), cfg.Database)
 	if err != nil {
 		return err
@@ -543,7 +554,15 @@ func Run() error {
 		fmt.Printf("warn: backfill body_html failed: %v\n", err)
 	}
 
-	serveSPA(router, cfg.StaticDir)
+	router.GET("/", s.seoHomeHandler(staticDir, cfg.Site.Title))
+	router.GET("/post/:slug", s.seoPostHandler(staticDir, cfg.Site.Title))
+	router.GET("/archive", s.seoArchiveHandler(staticDir, cfg.Site.Title))
+	router.GET("/categories", s.seoCategoriesHandler(staticDir, cfg.Site.Title))
+	router.GET("/category/:name", s.seoCategoryHandler(staticDir, cfg.Site.Title))
+	router.GET("/robots.txt", s.seoRobotsHandler())
+	router.GET("/sitemap.xml", s.seoSitemapHandler(cfg.Site.Title))
+
+	serveSPA(router, staticDir)
 
 	if err := router.Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
 		return err
@@ -1004,6 +1023,54 @@ func serveSPA(router *gin.Engine, staticDir string) {
 	})
 }
 
+func resolveStaticDir(cfgPath, staticDir string) string {
+	cfgDir := filepath.Dir(cfgPath)
+	if cfgDir == "" {
+		cfgDir = "."
+	}
+
+	type candidate struct {
+		path string
+	}
+
+	var candidates []candidate
+	if staticDir != "" {
+		candidates = append(candidates, candidate{path: staticDir})
+		if !filepath.IsAbs(staticDir) && cfgDir != "." {
+			candidates = append(candidates, candidate{path: filepath.Join(cfgDir, staticDir)})
+		}
+	}
+
+	candidates = append(candidates,
+		candidate{path: filepath.Join(cfgDir, "static")},
+		candidate{path: filepath.Join(cfgDir, "frontend", "dist", "selfecho-frontend")},
+		candidate{path: filepath.Join(cfgDir, "..", "frontend", "dist", "selfecho-frontend")},
+	)
+
+	seen := make(map[string]struct{}, len(candidates))
+	for _, c := range candidates {
+		dir := filepath.Clean(c.path)
+		if dir == "" {
+			continue
+		}
+		if _, ok := seen[dir]; ok {
+			continue
+		}
+		seen[dir] = struct{}{}
+
+		info, err := os.Stat(dir)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, "index.html")); err != nil {
+			continue
+		}
+		return dir
+	}
+
+	return filepath.Clean(staticDir)
+}
+
 func (s *server) listArchives(c *gin.Context) {
 	ctx := c.Request.Context()
 	rows, err := s.db.QueryContext(ctx, `SELECT id, name, COALESCE(description, ''), created_at FROM archives ORDER BY name`)
@@ -1230,6 +1297,7 @@ func (s *server) createArticle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	slugBase := slug
 
 	var archiveID *string
 	if payload.Archive != "" {
@@ -1249,17 +1317,32 @@ func (s *server) createArticle(c *gin.Context) {
 	bodyHTML := renderMarkdown(payload.BodyMD)
 
 	var createdID string
-	err = s.db.QueryRowContext(
-		ctx,
-		`INSERT INTO articles (slug, title, body_md, body_html, status, archive_id, published_at, type) 
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-		slug, payload.Title, payload.BodyMD, bodyHTML, payload.Status, archiveID, publishedAt, payload.Type,
-	).Scan(&createdID)
+	for attempt := 0; attempt < 3; attempt++ {
+		uniqueSlug, err := s.ensureUniqueSlug(ctx, slugBase, "")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "slug 去重失败"})
+			return
+		}
+		slug = uniqueSlug
+
+		err = s.db.QueryRowContext(
+			ctx,
+			`INSERT INTO articles (slug, title, body_md, body_html, status, archive_id, published_at, type) 
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+			slug, payload.Title, payload.BodyMD, bodyHTML, payload.Status, archiveID, publishedAt, payload.Type,
+		).Scan(&createdID)
+		if err == nil {
+			break
+		}
+		if !isUniqueViolation(err) {
+			break
+		}
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("创建文章失败: %v", err)})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"id": createdID})
+	c.JSON(http.StatusCreated, gin.H{"id": createdID, "slug": slug})
 	s.cache.invalidateAll()
 }
 
@@ -1285,6 +1368,7 @@ func (s *server) updateArticle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	slugBase := slug
 
 	var archiveID *string
 	if payload.Archive != "" {
@@ -1303,13 +1387,29 @@ func (s *server) updateArticle(c *gin.Context) {
 
 	bodyHTML := renderMarkdown(payload.BodyMD)
 
-	res, err := s.db.ExecContext(
-		ctx,
-		`UPDATE articles 
-		 SET title=$1, slug=$2, body_md=$3, body_html=$4, status=$5, archive_id=$6, published_at=$7, type=$8, updated_at=now()
-		 WHERE id=$9`,
-		payload.Title, slug, payload.BodyMD, bodyHTML, payload.Status, archiveID, publishedAt, payload.Type, id,
-	)
+	var res sql.Result
+	for attempt := 0; attempt < 3; attempt++ {
+		uniqueSlug, err := s.ensureUniqueSlug(ctx, slugBase, id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "slug 去重失败"})
+			return
+		}
+		slug = uniqueSlug
+
+		res, err = s.db.ExecContext(
+			ctx,
+			`UPDATE articles 
+			 SET title=$1, slug=$2, body_md=$3, body_html=$4, status=$5, archive_id=$6, published_at=$7, type=$8, updated_at=now()
+			 WHERE id=$9`,
+			payload.Title, slug, payload.BodyMD, bodyHTML, payload.Status, archiveID, publishedAt, payload.Type, id,
+		)
+		if err == nil {
+			break
+		}
+		if !isUniqueViolation(err) {
+			break
+		}
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("更新文章失败: %v", err)})
 		return

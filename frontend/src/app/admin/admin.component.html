@@ -7,24 +7,35 @@
       <span class="sep">/</span>
           <div class="crumb-dropdown" (mouseenter)="showMenu=true" (mouseleave)="showMenu=false">
             <a routerLink="/admin/posts" class="link inline-flex items-center gap-1">
-              Posts <span class="text-xs">▾</span>
+              {{ pageLabel }} <span class="text-xs">▾</span>
             </a>
             <div class="menu" *ngIf="showMenu">
               <a class="menu-item" routerLink="/admin/posts">Posts</a>
+              <a class="menu-item" routerLink="/admin/memos">Memos</a>
               <a class="menu-item" routerLink="/admin/archive">Archives</a>
               <a class="menu-item" routerLink="/admin/email">Email</a>
-              <a class="menu-item" routerLink="/admin">Memos</a>
               <a class="menu-item" routerLink="/admin/health">Health</a>
             </div>
       </div>
     </nav>
     <div class="flex items-center gap-3">
-      <select class="filter-select" [(ngModel)]="filterType" (change)="page = 1; loadArticles()">
+      <select
+        *ngIf="!fixedType"
+        class="filter-select"
+        [(ngModel)]="filterType"
+        (change)="page = 1; loadArticles()"
+      >
         <option value="all">全部类型</option>
             <option value="post">文章</option>
             <option value="memo">备忘录</option>
           </select>
-          <a routerLink="/admin/new" class="link font-semibold text-[#3273dc]">New Post</a>
+          <a
+            routerLink="/admin/new"
+            [queryParams]="newTypeQueryParam ? { type: newTypeQueryParam } : null"
+            class="link font-semibold text-[#3273dc]"
+          >
+            {{ newLabel }}
+          </a>
         </div>
   </div>
 
@@ -72,7 +83,7 @@
       </td>
     </tr>
         <tr *ngIf="articles.length === 0">
-          <td colspan="5" class="empty">暂无文章</td>
+          <td colspan="5" class="empty">{{ emptyLabel }}</td>
         </tr>
       </tbody>
     </table>
